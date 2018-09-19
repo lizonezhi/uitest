@@ -1065,11 +1065,15 @@ class Device(object):
         """
         self.shell("input tap %s %s" % (str(element[0]), str(element[1])))
 
-    def click(self, x, y):
+    def click(self, x, y=None):
         """
         发送触摸点击事件
         usage: click(0.5, 0.5) 点击屏幕中心位置
         """
+        if isinstance(x,(list,tuple)):
+            x0 = x
+            x = x0[0]
+            y = x0[1]
         if x < 1:
             self.shell("input tap %s %s" % (
             str(x * self.getScreenResolution()[0]), str(y * self.getScreenResolution()[1])))
