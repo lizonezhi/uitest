@@ -1646,6 +1646,17 @@ class Device(object):
         :return: 
         '''
         self.adb_return('push %s %s' % (local, remote))
+    def is_remote_file_exist(self, remote):
+        '''
+        判断手机内部文件是否存在
+        :param remote: 
+        :return: 存在 Ture;不存在 False
+        '''
+        ls_remote = self.shell_return_os_popen(remote)
+        if 'No such file or directory' in ls_remote or 'not found' in ls_remote:
+            return False
+        else:
+            return True
     def pull(self, remote, local=''):
         '''
         pull手机里的文件到电脑本地
@@ -1653,6 +1664,8 @@ class Device(object):
         :param local: 
         :return: 
         '''
+        if not self.is_remote_file_exist(remote):
+            print('手机文件不存在')
         self.adb_return('pull %s %s' % (remote, local))
     def pull_apkByPackagename(self, packagename, local=''):
         '''
@@ -1666,13 +1679,20 @@ class Device(object):
         self.adb('remount')
         self.adb_return('remount')
         apk_version = self.getVersionName(packagename)
-        resourcePath = apk_version[-2]
+        resourcePath = apk_version[-2]  # '/data/app/com.lzz.test-1'
+        resourceName = '/'+resourcePath.split('/')[-1]+'.apk'
+        resourcePath_resourceName = resourcePath+resourceName
         is_split = apk_version[-1]
         if is_split:
             print('apk文件被拆分')
         else:
             print('取出完整文件')
-        self.pull(resourcePath+'/base.apk', local)
+        if self.is_remote_file_exist(resourcePath+'/base.apk'):
+            self.pull(resourcePath+'/base.apk', local)
+        elif self.is_remote_file_exist(resourcePath_resourceName):
+            self.pull(resourcePath_resourceName, local)
+        else:
+            print('手机文件不存在')
     # 点亮解锁屏幕
     def screen_on(self):
         self.sendKeyEvent(keycode=224)
