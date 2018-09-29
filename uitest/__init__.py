@@ -1065,6 +1065,10 @@ class Device(object):
     def shell_return(self, args):
         cmd = "%s %s shell %s" % (command, self.device_id, str(args))
         return subprocess.check_output(cmd).decode('utf8')
+    # adb shell命令,返回运行结果.比如adb shell ls sdcard/dd.txt的返回，上面获取不了
+    def shell_return_os_popen(self, args):
+        cmd = "%s %s shell %s" % (command, self.device_id, str(args))
+        return list(os.popen(cmd).readlines())[0].replace('\n','')
     # 获取udid ，判断设备是否连接
     def getUdid(self):
         try:
@@ -1728,7 +1732,7 @@ class Device(object):
     def getVersionName(self, packageName):
         '''
         :param packageName: 包名
-        :return: 内部版本号、版本名、首次安装时间、上次安装时间、data/app/路径、是否拆分
+        :return: 0内部版本号、1版本名、2首次安装时间、3上次安装时间、4data/app/路径、5是否拆分
         '''
         if packageName != '':
             versionName = self.shell_return(
