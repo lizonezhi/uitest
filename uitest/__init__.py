@@ -18,15 +18,17 @@ import time
 
 import xml.etree.cElementTree as ET
 
+command = 'adb'
+fastboot = 'fastboot'
 PATH = lambda p: os.path.abspath(p)
 
 # 判断系统类型，windows使用findstr，linux使用grep
 system = platform.system()
-if system is "Windows":
-    find_util = "findstr"
-else:
-    find_util = "grep"
-
+# if system is "Windows":
+#     find_util = "findstr"
+# else:
+#     find_util = "grep"
+find_util = "grep"
 # # 判断是否设置环境变量ANDROID_HOME
 # if "ANDROID_HOME" in os.environ:
 #     if system == "Windows":
@@ -36,8 +38,294 @@ else:
 # else:
 #     raise EnvironmentError(
 #         "Adb not found in $ANDROID_HOME path: %s." % os.environ["ANDROID_HOME"])
-command = 'adb'
 
+def getUdid():
+    '''
+    :return:adb devices 返回的第一个设备 
+    '''
+    try:
+        '''''获取设备列表信息，并用"\r\n"拆分'''
+        deviceInfo = subprocess.check_output('%s devices' % (command)).decode().split("\r\n")
+        adb_first_start = False
+        for i in deviceInfo:
+            if 'successfully' in i:
+                adb_first_start = True
+                break
+        if adb_first_start:
+            udid = 'device'.join(deviceInfo[3].split('device')[:1])
+            '''''如果没有链接设备或者设备读取失败，第二个元素为空'''
+            if deviceInfo[3] == '':
+                return ''
+            else:
+                return udid.strip()
+        else:
+            udid='device'.join(deviceInfo[1].split('device')[:1])
+            '''''如果没有链接设备或者设备读取失败，第二个元素为空'''
+            if deviceInfo[1]=='':
+                return ''
+            else:
+                return udid.strip()
+    except:
+        pass
+def get_sideload_udid_list():
+    '''
+    :return: sideload 界面的设备
+    '''
+    try:
+        udid_list = []
+        '''''获取设备列表信息，并用"\r\n"拆分'''
+        deviceInfo = subprocess.check_output('%s devices' % (command)).decode().split("\r\n")
+        adb_first_start = False
+        for i in deviceInfo:
+            if 'successfully' in i:
+                adb_first_start = True
+                break
+        if adb_first_start:
+            '''''如果没有链接设备或者设备读取失败，第二个元素为空'''
+            if deviceInfo[3] == '':
+                return ''
+            else:
+                for i in range(3,11):
+                    try:
+                        j = '\tsideload'.join(deviceInfo[i].split('\tsideload')[:1])
+                        udid_list.append(j)
+                        if j == '' or 'device' in j or 'recovery' in j:
+                            udid_list.remove(j)
+                    except:
+                        break
+                return udid_list
+        else:
+            '''''如果没有链接设备或者设备读取失败，第二个元素为空'''
+            if deviceInfo[1]=='':
+                return ''
+            else:
+                for i in range(1,9):
+                    try:
+                        j = '\tsideload'.join(deviceInfo[i].split('\tsideload')[:1])
+                        udid_list.append(j)
+                        if j == '' or 'device' in j or 'recovery' in j:
+                            udid_list.remove(j)
+                    except:
+                        break
+                return udid_list
+    except :
+        pass
+def get_recovery_udid_list():
+    '''
+    :return: recovery 界面的设备
+    '''
+    try:
+        udid_list = []
+        '''''获取设备列表信息，并用"\r\n"拆分'''
+        deviceInfo = subprocess.check_output('%s devices' % (command)).decode().split("\r\n")
+        adb_first_start = False
+        for i in deviceInfo:
+            if 'successfully' in i:
+                adb_first_start = True
+                break
+        if adb_first_start:
+            '''''如果没有链接设备或者设备读取失败，第二个元素为空'''
+            if deviceInfo[3] == '':
+                return ''
+            else:
+                for i in range(3,11):
+                    try:
+                        j = '\trecovery'.join(deviceInfo[i].split('\trecovery')[:1])
+                        udid_list.append(j)
+                        if j == '' or 'device' in j or 'sideload' in j:
+                            udid_list.remove(j)
+                    except:
+                        break
+                return udid_list
+        else:
+            '''''如果没有链接设备或者设备读取失败，第二个元素为空'''
+            if deviceInfo[1]=='':
+                return ''
+            else:
+                for i in range(1,9):
+                    try:
+                        j = '\trecovery'.join(deviceInfo[i].split('\trecovery')[:1])
+                        udid_list.append(j)
+                        if j == '' or 'device' in j or 'sideload' in j:
+                            udid_list.remove(j)
+                    except:
+                        break
+                return udid_list
+    except :
+        pass
+def get_fastboot_udid_list():
+    '''
+    :return: recovery 界面的设备
+    '''
+    try:
+        udid_list = []
+        '''''获取设备列表信息，并用"\r\n"拆分'''
+        deviceInfo = subprocess.check_output('%s devices' % (fastboot)).decode().split("\r\n")
+        if deviceInfo[0]=='':
+            return ''
+        else:
+            for i in range(0,8):
+                try:
+                    j = '\tfastboot'.join(deviceInfo[i].split('\tfastboot')[:1])
+                    udid_list.append(j)
+                    if j == '':
+                        udid_list.remove(j)
+                except:
+                    break
+            return udid_list
+    except :
+        pass
+def get_udid_list():
+    '''
+    :return: adb devices 返回的设备(sideload和recover界面除外)
+    '''
+    try:
+        udid_list = []
+        '''''获取设备列表信息，并用"\r\n"拆分'''
+        deviceInfo = subprocess.check_output('%s devices' % (command)).decode().split("\r\n")
+        adb_first_start = False
+        for i in deviceInfo:
+            if 'successfully' in i:
+                adb_first_start = True
+                break
+        if adb_first_start:
+            '''''如果没有链接设备或者设备读取失败，第二个元素为空'''
+            if deviceInfo[3] == '':
+                return ''
+            else:
+                for i in range(3,11):
+                    try:
+                        j = '\tdevice'.join(deviceInfo[i].split('\tdevice')[:1])
+                        udid_list.append(j)
+                        if j == '' or 'sideload' in j or 'recovery' in j:
+                            udid_list.remove(j)
+                    except:
+                        break
+                return udid_list
+        else:
+            '''''如果没有链接设备或者设备读取失败，第二个元素为空'''
+            if deviceInfo[1]=='':
+                return ''
+            else:
+                for i in range(1,9):
+                    try:
+                        j = '\tdevice'.join(deviceInfo[i].split('\tdevice')[:1])
+                        udid_list.append(j)
+                        if j == '' or 'sideload' in j or 'recovery' in j:
+                            udid_list.remove(j)
+                    except:
+                        break
+                return udid_list
+    except :
+        pass
+# 字节bytes转化kb\m\g
+def formatSize(bytes, unit = 'm'):
+    '''
+    :param bytes: 
+    :param unit= 'b','k','m','g'
+    :return: 'b','k','m','g'
+    '''
+    try:
+        bytes = float(bytes)
+    except:
+        print("传入的字节格式不对")
+        return "Error"
+    kb = bytes / 1024
+    M = kb / 1024
+    G = M / 1024
+    if unit == 'b' or unit == 'bytes':
+        return bytes
+    elif unit == 'k' or unit == 'kb':
+        return kb
+    elif unit == 'm' or unit == 'mb':
+        return M
+    elif unit == 'g' or unit == 'gb':
+        return G
+# 获取文件大小
+def getDocSize(path, unit='m'):
+    '''
+    :param bytes: 
+    :param unit= 'b','k','m','g'
+    :return: 'b','k','m','g'
+    '''
+    try:
+        size = os.path.getsize(path)
+        return formatSize(size, unit=unit)
+    except Exception as err:
+        print(err)
+# 获取文件夹大小
+def getFileSize(path, unit='m'):
+    '''
+    :param bytes: 
+    :param unit= 'b','k','m','g'
+    :return: 'b','k','m','g'
+    '''
+    sumsize = 0
+    try:
+        filename = os.walk(path)
+        for root, dirs, files in filename:
+            for fle in files:
+                size = os.path.getsize(path + fle)
+                sumsize += size
+        return formatSize(sumsize, unit=unit)
+    except Exception as err:
+        print(err)
+
+# 计时
+def interface_show(**kwargs):
+    lineTmpla = ' ' * 5 + kwargs['title'] + kwargs['artist'] + kwargs['rate'] + " %-3s"
+    print(time_remain(lineTmpla, kwargs['minutes']))
+
+# 倒计时
+def time_remain(lineTmpla, mins):
+    '''
+    本行倒计时刷新时间计时效果，需要在interface_show方法里使用此方法
+    :param lineTmpla: 
+    :param mins: 多少秒后停止
+    :usage:  interface_show(title="倒计时demo", artist="哗嚓啊", rate="揍起来", minutes=5) 
+    '''
+    count = 0
+    while (count < mins):
+        count += 1
+        n = mins - count
+        time.sleep(1)
+        sys.stdout.write("\r" + lineTmpla % (n), )
+        sys.stdout.flush()
+        if not n:
+            return 'completed'
+
+# 正计时
+def time_remain_jishi(lineTmpla, mins):
+    '''
+    本行刷新时间计时效果，需要在interface_show方法里使用此方法
+    :param lineTmpla: 
+    :param mins: 多少秒后停止
+    :usage:  interface_show(title="倒计时demo", artist="哗嚓啊", rate="揍起来", minutes=5) 
+    '''
+    count = 0
+    while True:
+        count += 1
+        n = mins + count
+        time.sleep(1)
+        sys.stdout.write("\r" + lineTmpla % (n), )
+        sys.stdout.flush()
+        if n > 9:
+            return 'completed'
+
+def write_txt_file(name='name', content='content'):
+    '''
+    写入文件到电脑本地
+    :param name:文件名  content：内容 
+    :return: True or False 写入成功或失败
+    ：usage： write_txt_file(name='记录日志', content='123')
+    '''
+    try:
+        f = open('%s.txt' % (name), 'a')
+        f.write('%s \n' % (content))
+        f.close()
+        return True
+    except:
+        return False
 # 判断是否为数字
 def is_number(s):
     '''
@@ -115,7 +403,7 @@ class Element(object):
 
         return (Xpoint, Ypoint)
 
-    def d(self,attrib=None,name=None, **msg):
+    def d(self, attrib=None, name=None, **msg):
         """
         同属性单个元素，返回单个坐标元组，(x, y)
         :args:
@@ -125,6 +413,7 @@ class Element(object):
              d(text='8')
              d(content_desc='乘')
         """
+        textContains = False
         if attrib and name:
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
@@ -150,6 +439,14 @@ class Element(object):
                         break
                 except:
                     pass
+                try:
+                    if msg['textContains'] != '':
+                        attrib = 'text'
+                        name = msg['textContains']
+                        textContains = True
+                        break
+                except:
+                    pass
         Xpoint = None
         Ypoint = None
 
@@ -157,22 +454,135 @@ class Element(object):
         tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
         treeIter = tree.iter(tag="node")
         for elem in treeIter:
-            if elem.attrib[attrib] == name:
-                # 获取元素所占区域坐标[x, y][x, y]
-                bounds = elem.attrib["bounds"]
+            if textContains:
+                if name in elem.attrib[attrib]:
+                    # 获取元素所占区域坐标[x, y][x, y]
+                    bounds = elem.attrib["bounds"]
 
-                # 通过正则获取坐标列表
-                coord = self.pattern.findall(bounds)
+                    # 通过正则获取坐标列表
+                    coord = self.pattern.findall(bounds)
 
-                # 求取元素区域中心点坐标
-                Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
-                Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
-                break
+                    # 求取元素区域中心点坐标
+                    Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
+                    Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
+                    break
+            else:
+                if elem.attrib[attrib] == name:
+                    # 获取元素所占区域坐标[x, y][x, y]
+                    bounds = elem.attrib["bounds"]
+
+                    # 通过正则获取坐标列表
+                    coord = self.pattern.findall(bounds)
+
+                    # 求取元素区域中心点坐标
+                    Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
+                    Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
+                    break
 
         if Xpoint is None or Ypoint is None:
-            raise Exception("Not found this element(%s) in current activity" % name)
-        return (Xpoint, Ypoint)
-    def d_right_corner(self,attrib=None,name=None, **msg):
+            return False
+        else:
+            return (Xpoint, Ypoint)
+    def click(self, attrib=None, name=None, **msg):
+        """
+        同属性单个元素，返回是否存在
+        :args:
+        - attrib - node节点中某个属性
+        - name - node节点中某个属性对应的值
+        用法：d(resourceId='com.android.calculator2:id/op_mul')
+             d(text='8')
+             d(content_desc='乘')
+        """
+        textContains = False
+        if attrib and name:
+            attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
+        else:
+            for attrib in msg:
+                try:
+                    if msg['resourceId'] != '':
+                        attrib = 'resource-id'
+                        name = msg['resourceId']
+                        break
+                except:
+                    pass
+                try:
+                    if msg['text'] != '':
+                        attrib = 'text'
+                        name = msg['text']
+                        break
+                except:
+                    pass
+                try:
+                    if msg['content_desc'] != '':
+                        attrib = 'content-desc'
+                        name = msg['content_desc']
+                        break
+                except:
+                    pass
+                try:
+                    if msg['textContains'] != '':
+                        attrib = 'text'
+                        name = msg['textContains']
+                        textContains = True
+                        break
+                except:
+                    pass
+        Xpoint = None
+        Ypoint = None
+
+        self.__uidump()
+        tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
+        treeIter = tree.iter(tag="node")
+        for elem in treeIter:
+            if textContains:
+                if name in elem.attrib[attrib]:
+                    # 获取元素所占区域坐标[x, y][x, y]
+                    bounds = elem.attrib["bounds"]
+
+                    # 通过正则获取坐标列表
+                    coord = self.pattern.findall(bounds)
+
+                    # 求取元素区域中心点坐标
+                    Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
+                    Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
+                    break
+            else:
+                if elem.attrib[attrib] == name:
+                    # 获取元素所占区域坐标[x, y][x, y]
+                    bounds = elem.attrib["bounds"]
+
+                    # 通过正则获取坐标列表
+                    coord = self.pattern.findall(bounds)
+
+                    # 求取元素区域中心点坐标
+                    Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
+                    Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
+                    break
+
+        if Xpoint is None or Ypoint is None:
+            return False
+        else:
+            self.utils.click(Xpoint, Ypoint)
+            return True
+    def swipe_find(self, **msg):
+        """
+        下滑屏幕,找到元素就点击
+        """
+        try:
+            msg['resourceId'] != ''
+            msg['text'] != ''
+            msg['content_desc'] != ''
+            msg['textContains'] != ''
+        except:
+            pass
+        start_time = time.time()
+        while not self.click(**msg):
+            self.utils.swipeToUp()
+            if time.time() - start_time > 60:
+                print('未找到%s' % (msg))
+                return False
+        return True
+    def d_right_corner(self, attrib=None, name=None, **msg):
         """
         同属性单个元素，返回单个 右下角 坐标元组，(x, y)
         :args:
@@ -182,6 +592,7 @@ class Element(object):
              d(text='8')
              d(content_desc='乘')
         """
+        textContains = False
         if attrib and name:
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
@@ -207,6 +618,14 @@ class Element(object):
                         break
                 except:
                     pass
+                try:
+                    if msg['textContains'] != '':
+                        attrib = 'text'
+                        name = msg['textContains']
+                        textContains = True
+                        break
+                except:
+                    pass
         Xpoint = None
         Ypoint = None
 
@@ -214,23 +633,37 @@ class Element(object):
         tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
         treeIter = tree.iter(tag="node")
         for elem in treeIter:
-            if elem.attrib[attrib] == name:
-                # 获取元素所占区域坐标[x, y][x, y]
-                bounds = elem.attrib["bounds"]
+            if textContains:
+                if name in elem.attrib[attrib]:
+                    # 获取元素所占区域坐标[x, y][x, y]
+                    bounds = elem.attrib["bounds"]
 
-                # 通过正则获取坐标列表
-                coord = self.pattern.findall(bounds)
+                    # 通过正则获取坐标列表
+                    coord = self.pattern.findall(bounds)
 
-                # 求取元素区域右下角点坐标
-                Xpoint = (int(coord[2]) - int(coord[0])) * 0.99 + int(coord[0])
-                Ypoint = (int(coord[3]) - int(coord[1])) * 0.99 + int(coord[1])
-                break
+                    # 求取元素区域中心点坐标
+                    Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
+                    Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
+                    break
+            else:
+                if elem.attrib[attrib] == name:
+                    # 获取元素所占区域坐标[x, y][x, y]
+                    bounds = elem.attrib["bounds"]
+
+                    # 通过正则获取坐标列表
+                    coord = self.pattern.findall(bounds)
+
+                    # 求取元素区域中心点坐标
+                    Xpoint = (int(coord[2]) - int(coord[0])) / 0.99 + int(coord[0])
+                    Ypoint = (int(coord[3]) - int(coord[1])) / 0.99 + int(coord[1])
+                    break
 
         if Xpoint is None or Ypoint is None:
-            raise Exception("Not found this element(%s) in current activity" % name)
-        return (Xpoint, Ypoint)
+            return False
+        else:
+            return (Xpoint, Ypoint)
 
-    def info(self,attrib=None,name=None, **msg):
+    def info(self, attrib=None, name=None, **msg):
         """
         同属性单个元素，返回单个控件所有属性
         :args:
@@ -266,13 +699,19 @@ class Element(object):
                         break
                 except:
                     pass
-
+                try:
+                    if msg['textContains'] != '':
+                        attrib = 'text'
+                        name = msg['textContains']
+                        break
+                except:
+                    pass
         element_info = None
         self.__uidump()
         tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
         treeIter = tree.iter(tag="node")
         for elem in treeIter:
-            if elem.attrib[attrib] == name:
+            if name in elem.attrib[attrib]:
                 element_info = elem.attrib
                 break
         return element_info
@@ -1153,18 +1592,12 @@ class Device(object):
             os.makedirs("tmp//meminfo", exist_ok=True)
         if packageName != '':
             Native_Heap = self.shell_return('dumpsys meminfo %s | grep Native' % (packageName)).split('\r\n')[0].strip()
-            g = open('tmp/meminfo/%s的Native层内存使用情况%s.txt' % (packageName, self.get_time()[:10]), 'a')
-            g.write('%s\n' % (Native_Heap))
-            g.close()
+            write_txt_file(name='tmp/meminfo/%s的Native层内存使用情况%s.txt' % (packageName, self.get_time()[:10]), content=Native_Heap)
             Dalvik_Heap = self.shell_return('dumpsys meminfo %s | grep Dalvik' % (packageName)).split('\r\n')[0].strip()
-            g = open('tmp/meminfo/%s的Java    堆内存使用情况%s.txt' % (packageName, self.get_time()[:10]), 'a')
-            g.write('%s\n' % (Dalvik_Heap))
-            g.close()
+            write_txt_file(name='tmp/meminfo/%s的Java    堆内存使用情况%s.txt' % (packageName, self.get_time()[:10]), content=Dalvik_Heap)
         else:
             RAM_Used = self.shell_return('dumpsys meminfo | grep Used').split('\r\n')[0].strip()
-            g = open('tmp/meminfo/全部内存情况%s.txt' % (self.get_time()[:10]), 'a')
-            g.write('%s\n' % (RAM_Used))
-            g.close()
+            write_txt_file(name='tmp/meminfo/全部内存情况%s.txt' % (self.get_time()[:10]), content=RAM_Used)
             # top6 = self.shell_return('top -m 6 -n 1').split('\r\n')[0].strip()
             # g = open('tmp/meminfo/全部top前6内存情况%s.txt' % (self.get_time()[:10]), 'a')
             # g.write('%s\n' % (top6))
@@ -1201,7 +1634,41 @@ class Device(object):
         except:
             self.print_before('screenshot_err_no_open失败')
             pass
-
+    def push(self, local, remote):
+        '''
+        push电脑本地文件到手机
+        :param pc_file: 
+        :param remote: 
+        :return: 
+        '''
+        self.adb_return('push %s %s' % (local, remote))
+    def pull(self, remote, local=''):
+        '''
+        pull手机里的文件到电脑本地
+        :param remote: 
+        :param local: 
+        :return: 
+        '''
+        self.adb_return('pull %s %s' % (remote, local))
+    def pull_apkByPackagename(self, packagename, local=''):
+        '''
+        根据apk包名 取出手机里apk文件，需要root权限
+        :param packagename: 
+        :param local: 
+        :return: 
+        '''
+        self.adb('root')
+        self.adb_return('root')
+        self.adb('remount')
+        self.adb_return('remount')
+        apk_version = self.getVersionName(packagename)
+        resourcePath = apk_version[-2]
+        is_split = apk_version[-1]
+        if is_split:
+            print('apk文件被拆分')
+        else:
+            print('取出完整文件')
+        self.pull(resourcePath+'/base.apk', local)
     # 点亮解锁屏幕
     def screen_on(self):
         self.sendKeyEvent(keycode=224)
@@ -1258,10 +1725,10 @@ class Device(object):
         except:
             return ''
     # 获取指定设备已装包名版本信息
-    def getVersionName(self,packageName):
+    def getVersionName(self, packageName):
         '''
         :param packageName: 包名
-        :return: 内部版本号、版本名、首次安装时间、上次安装时间
+        :return: 内部版本号、版本名、首次安装时间、上次安装时间、data/app/路径、是否拆分
         '''
         if packageName != '':
             versionName = self.shell_return(
@@ -1274,6 +1741,10 @@ class Device(object):
                 'dumpsys package %s | grep lastUpdateTime' % (packageName)).replace(
                 '\n', '').replace('\r', '').strip()
             versionFirstTime = self.shell_return('dumpsys package %s | grep firstInstallTime' % (
+            packageName)).replace('\n', '').replace('\r', '').strip()
+            resourcePath = self.shell_return('dumpsys package %s | grep resourcePath' % (
+            packageName)).replace('\n', '').replace('\r', '').strip()
+            splits = self.shell_return('dumpsys package %s | grep splits' % (
             packageName)).replace('\n', '').replace('\r', '').strip()
             if versionCode != '':
                 versionCode = versionCode.split(' ')
@@ -1290,7 +1761,12 @@ class Device(object):
                 versionTime = versionTime.split('lastUpdateTime=')[1]
             if versionFirstTime != '':
                 versionFirstTime = versionFirstTime.split('firstInstallTime=')[1]
-            return [versionName, versionCode, versionFirstTime, versionTime]
+            if splits == 'splits=[base]':
+                splits = False
+            else:
+                splits = True
+            resourcePath = resourcePath.replace('resourcePath=','')
+            return [versionName, versionCode, versionFirstTime, versionTime, resourcePath, splits]
     # 获取sn号
     def get_sn(self):
         serialno = self.shell_return('getprop persist.sys.product.serialno').replace(
@@ -1315,7 +1791,7 @@ class Device(object):
         return ' %s, %s, %s' % (f.f_code.co_filename, f.f_code.co_name, str(f.f_lineno))
 
     # 根据图片名判断当前页面
-    def find_icon(self, icon_name, confidence = None):
+    def find_icon(self, icon_name, confidence=None):
         '''
         usage:  find_icon('icon/print_cancel.720x1280.jpg', '')
                 find_icon('icon/print_cancel.720x1280.jpg', 0.9)
@@ -1362,3 +1838,43 @@ class Device(object):
     # HOME键
     def home(self):
         self.sendKeyEvent(Keycode.HOME)
+    def get_allnet(self, packageName):
+        '''
+        获取指定包名的应用的wifi流量消耗, 目前只针对部分机型
+        :param packageName: 
+        :return: 使用流量：单位m：get_allnet('com.lzz.test')[4]
+        :usage: allnet = get_allnet('com.lzz.test')
+        # print('网络数据：', allnet[2]+allnet[3], 'kb','≈', allnet[4],'m')
+        '''
+        print('1、pid方式查看wifi流量：')
+        # 获取程序pid
+        package_pid = re.split('[ ]+', self.shell_return('ps | grep %s' % (packageName)).split("\r\r\n")[-2])[1].strip()
+        print('package_pid:',package_pid)
+        # 通过pid查看wifi流量
+        package_wlan = re.split('[ ]+', self.shell_return('cat /proc/%s/net/dev | grep wlan0' % (package_pid)).split("\r\r\n")[0])
+        package_wlan1 = int(package_wlan[2])/1024
+        package_wlan2 = int(package_wlan[10])/1024
+        print(round(package_wlan1), '+', round(package_wlan2), '=', round(package_wlan1+package_wlan2), 'kb ≈ ', round((package_wlan1+package_wlan2)/1024), 'm')
+        package_Thread = self.shell_return('cat /proc/%s/status | grep Thread' % (package_pid)).split("\t")[1].strip()
+        print('线程数:',package_Thread)
+
+        print('2、uid方式：')
+        # 获取程序uid
+        package_uid = self.shell_return('cat /proc/%s/status | grep Uid' % (package_pid)).split("\t")[1].strip()
+        print('package_uid:',package_uid)
+        # 通过uid查看wifi流量
+        package_allnet = self.shell_return('cat /proc/net/xt_qtaguid/stats | grep %s' % (package_uid)).split("\r\r\n")
+        package_list = []
+        for i in package_allnet:
+            if i == '':
+                break
+            else:
+                package_list.append(i.split(' '))
+        package_rx_bytes = 0
+        package_tx_bytes = 0
+        for i in package_list:
+            package_rx_bytes += int(i[5])
+            package_tx_bytes += int(i[7])
+        print('接收数据package_rx_bytes:', package_rx_bytes, '传输数据package_tx_bytes:', package_tx_bytes)
+        return [package_rx_bytes, package_tx_bytes, round(package_rx_bytes/1024), round(package_tx_bytes/1024), round((package_rx_bytes+package_tx_bytes)/1024/1024)]
+

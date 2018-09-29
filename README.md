@@ -25,6 +25,10 @@ e = uitest.Element('12344321')
 
 a.click(e.d(text='设置'))
 
+或者
+
+e.click(text='设置')
+
 
 
 获取当前包名
@@ -50,5 +54,4 @@ print(a.getThirdAppList())
 根据本地的图片来点击设备
 
 print(a.find_icon_click('icon/screenshot.png'))
-"# uitest" 
 "# uitest" 
