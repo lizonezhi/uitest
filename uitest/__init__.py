@@ -66,7 +66,7 @@ def getUdid():
             else:
                 return udid.strip()
     except:
-        pass
+        return ''
 def get_sideload_udid_list():
     '''
     :return: sideload 界面的设备
@@ -109,7 +109,7 @@ def get_sideload_udid_list():
                         break
                 return udid_list
     except :
-        pass
+        return ''
 def get_recovery_udid_list():
     '''
     :return: recovery 界面的设备
@@ -152,7 +152,7 @@ def get_recovery_udid_list():
                         break
                 return udid_list
     except :
-        pass
+        return ''
 def get_fastboot_udid_list():
     '''
     :return: recovery 界面的设备
@@ -174,7 +174,7 @@ def get_fastboot_udid_list():
                     break
             return udid_list
     except :
-        pass
+        return ''
 def get_udid_list():
     '''
     :return: adb devices 返回的设备(sideload和recover界面除外)
@@ -217,7 +217,7 @@ def get_udid_list():
                         break
                 return udid_list
     except :
-        pass
+        return ''
 # 字节bytes转化kb\m\g
 def formatSize(bytes, unit = 'm'):
     '''
@@ -344,11 +344,11 @@ def is_number(s):
         pass
     return False
 # 打印带颜色的字
-def print_color(text, color=1):
+def print_color(text, color=19):
     '''
     Windows CMD命令行颜色
     :param text: 打印的文字
-    :param color:  1蓝字 2绿字 4红色   ， 默认蓝色
+    :param color:  1蓝字 2绿字 4红色 6黄色  ，默认黄色（加亮）
     :usage: uitest.print_color('你好', 2)
     '''
     import ctypes
@@ -405,7 +405,8 @@ def print_color(text, color=1):
         FOREGROUND_BLUE | FOREGROUND_INTENSITY,  # 蓝字(加亮)16
         FOREGROUND_GREEN | FOREGROUND_INTENSITY,  # 绿字(加亮)17
         FOREGROUND_RED | FOREGROUND_INTENSITY,  # 红字(加亮)18
-        FOREGROUND_RED | FOREGROUND_INTENSITY | BACKGROUND_BLUE | BACKGROUND_INTENSITY  # 红字蓝底19
+        黄色 | FOREGROUND_INTENSITY,  # 黄字(加亮)19
+        FOREGROUND_RED | FOREGROUND_INTENSITY | BACKGROUND_BLUE | BACKGROUND_INTENSITY  # 红字蓝底20
     ]
     #http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winprog/winprog/windows_api_reference.asp for information on Windows APIs.
 
@@ -423,6 +424,46 @@ def print_color(text, color=1):
         reset_color()
 
     print_color_text(text, colors2[color])
+# Helper for popen() -- a proxy for a file whose close waits for the process
+class _wrap_close:
+    def __init__(self, stream, proc):
+        self._stream = stream
+        self._proc = proc
+    def close(self):
+        self._stream.close()
+        returncode = self._proc.wait()
+        if returncode == 0:
+            return None
+        if name == 'nt':
+            return returncode
+        else:
+            return returncode << 8  # Shift left to match old behavior
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        self.close()
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+    def __iter__(self):
+        return iter(self._stream)
+def os_popen(cmd):
+    '''
+    重写os.popen()方法
+    :param cmd: 
+    :return: 
+    usage： push_result = d.os_popen('-s %s push %s /data/local/tmp/tmp_apk.apk' % (udid, apk))
+            此处可以运行其它命令
+            push_result.close()
+    '''
+    if not isinstance(cmd, str):
+        raise TypeError("invalid cmd type (%s, expected string)" % type(cmd))
+    import io
+    cmd = '%s %s' % (command, cmd)
+    proc = subprocess.Popen(cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            bufsize=-1)
+    return _wrap_close(io.TextIOWrapper(proc.stdout), proc)
 class MyError(Exception):
     def __init__(self, value):
         self.value = value
@@ -1135,7 +1176,22 @@ class Device(object):
     def adb_return(self, args):
         cmd = "%s %s %s" % (command, self.device_id, str(args))
         return subprocess.check_output(cmd).decode('utf8')
-
+    def adb_os_popen(self, args):
+        '''
+        重写os.popen()方法,自带多线程效果
+        :param cmd: 
+        :return: 
+        usage： push_result = d.adb_os_popen('push %s /data/local/tmp/tmp_apk.apk' % (apk))
+                此处可以运行其它命令
+                push_result.close()
+        '''
+        import io
+        cmd = "%s %s %s" % (command, self.device_id, str(args))
+        proc = subprocess.Popen(cmd,
+                                shell=True,
+                                stdout=subprocess.PIPE,
+                                bufsize=-1)
+        return _wrap_close(io.TextIOWrapper(proc.stdout), proc)
     # adb shell命令
     def shell(self, args):
         cmd = "%s %s shell %s" % (command, self.device_id, str(args))
@@ -1246,6 +1302,11 @@ class Device(object):
         获取设备型号
         """
         return self.shell("getprop ro.product.model").stdout.read().strip().decode('utf8')
+    def getOsVersion(self):
+        """
+        获取os版本
+        """
+        return self.shell("getprop ro.build.id").stdout.read().strip().decode('utf8')
 
     def getPid(self, packageName):
         """
@@ -1516,7 +1577,7 @@ class Device(object):
         args:
         - packageName -:应用包名，非apk名
         """
-        self.adb("uninstall %s" % packageName)
+        return self.adb_return("uninstall %s" % packageName).split("\r\n")
 
     def clearAppData(self, packageName):
         """
