@@ -343,6 +343,86 @@ def is_number(s):
     except (TypeError, ValueError):
         pass
     return False
+# 打印带颜色的字
+def print_color(text, color=1):
+    '''
+    Windows CMD命令行颜色
+    :param text: 打印的文字
+    :param color:  1蓝字 2绿字 4红色   ， 默认蓝色
+    :usage: uitest.print_color('你好', 2)
+    '''
+    import ctypes
+    # 句柄号
+    STD_INPUT_HANDLE = -10
+    STD_OUTPUT_HANDLE = -11
+    STD_ERROR_HANDLE = -12
+
+    # 背景色
+    BACKGROUND_BLUE = 0x10  # 蓝
+    BACKGROUND_GREEN = 0x20  # 绿
+    BACKGROUND_RED = 0x40  # 红
+    BACKGROUND_INTENSITY = 0x80  # 加亮
+
+    # 前景色
+    FOREGROUND_BLACK = 0x0  # 黑
+    FOREGROUND_BLUE = 0x01  # 蓝
+    FOREGROUND_GREEN = 0x02  # 绿
+    FOREGROUND_RED = 0x04  # 红
+    FOREGROUND_INTENSITY = 0x08  # 加亮
+    黑色 = 0x00
+    蓝色 = 0x01
+    绿色 = 0x02
+    湖蓝色 = 0x03
+    红色 = 0x04
+    紫色 = 0x05
+    黄色 = 0x06
+    白色 = 0x07
+    灰色 = 0x08  # 加亮
+    淡蓝色 = 0x09
+    淡绿色 = 0x0A
+    淡浅绿色 = 0x0B
+    淡红色 = 0x0C
+    淡紫色 = 0x0D
+    淡黄色 = 0x0E
+    亮白色 = 0x0F
+    colors2 = [
+        黑色,
+        蓝色,
+        绿色,
+        湖蓝色,
+        红色,
+        紫色,
+        黄色,
+        白色,
+        灰色,
+        淡蓝色,
+        淡绿色,
+        淡浅绿色,
+        淡红色,
+        淡紫色,
+        淡黄色,
+        亮白色,
+        FOREGROUND_BLUE | FOREGROUND_INTENSITY,  # 蓝字(加亮)16
+        FOREGROUND_GREEN | FOREGROUND_INTENSITY,  # 绿字(加亮)17
+        FOREGROUND_RED | FOREGROUND_INTENSITY,  # 红字(加亮)18
+        FOREGROUND_RED | FOREGROUND_INTENSITY | BACKGROUND_BLUE | BACKGROUND_INTENSITY  # 红字蓝底19
+    ]
+    #http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winprog/winprog/windows_api_reference.asp for information on Windows APIs.
+
+    std_out_handle = ctypes.windll.kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+    def set_cmd_color(color, handle=std_out_handle):
+        bool = ctypes.windll.kernel32.SetConsoleTextAttribute(handle, color)
+        return bool
+
+    def reset_color():
+        set_cmd_color(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+
+    def print_color_text(text, color):
+        set_cmd_color(color)
+        sys.stdout.write('%s\n' % text)  # ==> print(text)
+        reset_color()
+
+    print_color_text(text, colors2[color])
 class MyError(Exception):
     def __init__(self, value):
         self.value = value
