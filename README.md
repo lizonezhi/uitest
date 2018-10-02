@@ -1,11 +1,12 @@
 # uitest
 - Python >=3.6
+
 安装：
 ```bash
 pip install -U --pre uitest
 ```
 
-导入包
+使用
 ```python
 import uitest
 ```
@@ -77,5 +78,6 @@ print(d.getThirdappList())
 备注：如需打包exe，可注释掉__init__代码里的from uitest import aircv as ac, 能大幅减小exe包大小
 
 
+"# uitest" 
 "# uitest" 
 "# uitest" 
