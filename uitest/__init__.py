@@ -5,6 +5,7 @@ __author__ = "lzz"
 '''
 参考：
 https://github.com/gb112211/Adb-For-Test
+项目地址：https://github.com/lizonezhi/uitest
 支持python3.6
 目前功能无需在手机上装任何程序
 '''
@@ -271,19 +272,17 @@ def getFileSize(path, unit='m'):
     except Exception as err:
         print(err)
 
-# 计时
-def interface_show(**kwargs):
-    lineTmpla = ' ' * 5 + kwargs['title'] + kwargs['artist'] + kwargs['rate'] + " %-3s"
-    print(time_remain(lineTmpla, kwargs['minutes']))
-
 # 倒计时
-def time_remain(lineTmpla, mins):
+def time_remain(**kwargs):
     '''
-    本行倒计时刷新时间计时效果，需要在interface_show方法里使用此方法
     :param lineTmpla: 
     :param mins: 多少秒后停止
-    :usage:  interface_show(title="倒计时demo", artist="哗嚓啊", rate="揍起来", minutes=5) 
+    :usage:  interface_show(title="倒计时demo", artist="内容", rate="内容", minutes=5) 
     '''
+    lineTmpla = ' ' * 5 + kwargs['title'] + kwargs['artist'] + kwargs['rate'] + " %-3s"
+    print(__time_remain(lineTmpla, kwargs['minutes']))
+# 倒计时
+def __time_remain(lineTmpla, mins):
     count = 0
     while (count < mins):
         count += 1
@@ -295,22 +294,69 @@ def time_remain(lineTmpla, mins):
             return 'completed'
 
 # 正计时
-def time_remain_jishi(lineTmpla, mins):
+def time_jishi(**kwargs):
     '''
-    本行刷新时间计时效果，需要在interface_show方法里使用此方法
     :param lineTmpla: 
     :param mins: 多少秒后停止
-    :usage:  interface_show(title="倒计时demo", artist="哗嚓啊", rate="揍起来", minutes=5) 
+    :usage:  time_jishi(title="计时demo", artist="内容", rate="") 
     '''
+    lineTmpla = kwargs['str'] + " %s " + "秒"
+    return __time_jishi(lineTmpla,
+                        kwargs['udid_all'] if kwargs.get('udid_all') else '',
+                        kwargs['device'] if kwargs.get('device') else '',
+                        kwargs['recovery'] if kwargs.get('recovery') else '',
+                        kwargs['sideload'] if kwargs.get('sideload') else '',
+                        kwargs['fastboot'] if kwargs.get('fastboot') else '',
+                        kwargs['timeout'] if kwargs.get('timeout') else 3600)
+# 正计时
+def __time_jishi(lineTmpla, udid_all, device, recovery, sideload, fastboot, timeout):
+    start_time = time.time()
     count = 0
-    while True:
-        count += 1
-        n = mins + count
-        time.sleep(1)
-        sys.stdout.write("\r" + lineTmpla % (n), )
-        sys.stdout.flush()
-        if n > 9:
-            return 'completed'
+    if udid_all:
+        while getUdid() == '':
+            count += 1
+            time.sleep(1)
+            sys.stdout.write("\r" + lineTmpla % (count) )
+            sys.stdout.flush()
+            if time.time() - start_time > timeout:
+                print_color('超时%s秒，自动退出' % (timeout), 4)
+                break
+    elif device:
+        while len(get_udid_list()) == 0:
+            count += 1
+            time.sleep(1)
+            sys.stdout.write("\r" + lineTmpla % (count) )
+            sys.stdout.flush()
+            if time.time() - start_time > timeout:
+                print_color('超时%s秒，自动退出' % (timeout), 4)
+                break
+    elif recovery:
+        while len(get_recovery_udid_list()) == 0:
+            count += 1
+            time.sleep(1)
+            sys.stdout.write("\r" + lineTmpla % (count) )
+            sys.stdout.flush()
+            if time.time() - start_time > timeout:
+                print_color('超时%s秒，自动退出' % (timeout), 4)
+                break
+    elif sideload:
+        while len(get_sideload_udid_list()) == 0:
+            count += 1
+            time.sleep(1)
+            sys.stdout.write("\r" + lineTmpla % (count) )
+            sys.stdout.flush()
+            if time.time() - start_time > timeout:
+                print_color('超时%s秒，自动退出' % (timeout), 4)
+                break
+    elif fastboot:
+        while len(get_fastboot_udid_list()) == 0:
+            count += 1
+            time.sleep(1)
+            sys.stdout.write("\r" + lineTmpla % (count) )
+            sys.stdout.flush()
+            if time.time() - start_time > timeout:
+                print_color('超时%s秒，自动退出' % (timeout), 4)
+                break
 
 def write_txt_file(name='name', content='content'):
     '''
@@ -406,7 +452,8 @@ def print_color(text, color=19):
         FOREGROUND_GREEN | FOREGROUND_INTENSITY,  # 绿字(加亮)17
         FOREGROUND_RED | FOREGROUND_INTENSITY,  # 红字(加亮)18
         黄色 | FOREGROUND_INTENSITY,  # 黄字(加亮)19
-        FOREGROUND_RED | FOREGROUND_INTENSITY | BACKGROUND_BLUE | BACKGROUND_INTENSITY  # 红字蓝底20
+        绿色 | FOREGROUND_INTENSITY,  # 绿字(加亮)20
+        FOREGROUND_RED | FOREGROUND_INTENSITY | BACKGROUND_BLUE | BACKGROUND_INTENSITY  # 红字蓝底21
     ]
     #http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winprog/winprog/windows_api_reference.asp for information on Windows APIs.
 
@@ -539,35 +586,23 @@ class Element(object):
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
             for attrib in msg:
-                try:
-                    if msg['resourceId'] != '':
-                        attrib = 'resource-id'
-                        name = msg['resourceId']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['text'] != '':
-                        attrib = 'text'
-                        name = msg['text']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['content_desc'] != '':
-                        attrib = 'content-desc'
-                        name = msg['content_desc']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['textContains'] != '':
-                        attrib = 'text'
-                        name = msg['textContains']
-                        textContains = True
-                        break
-                except:
-                    pass
+                if msg.get('resourceId'):
+                    attrib = 'resource-id'
+                    name = msg['resourceId']
+                    break
+                if msg.get('text'):
+                    attrib = 'text'
+                    name = msg['text']
+                    break
+                if msg.get('content_desc'):
+                    attrib = 'content-desc'
+                    name = msg['content_desc']
+                    break
+                if msg.get('textContains'):
+                    attrib = 'text'
+                    name = msg['textContains']
+                    textContains = True
+                    break
         Xpoint = None
         Ypoint = None
 
@@ -619,35 +654,23 @@ class Element(object):
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
             for attrib in msg:
-                try:
-                    if msg['resourceId'] != '':
-                        attrib = 'resource-id'
-                        name = msg['resourceId']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['text'] != '':
-                        attrib = 'text'
-                        name = msg['text']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['content_desc'] != '':
-                        attrib = 'content-desc'
-                        name = msg['content_desc']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['textContains'] != '':
-                        attrib = 'text'
-                        name = msg['textContains']
-                        textContains = True
-                        break
-                except:
-                    pass
+                if msg.get('resourceId'):
+                    attrib = 'resource-id'
+                    name = msg['resourceId']
+                    break
+                if msg.get('text'):
+                    attrib = 'text'
+                    name = msg['text']
+                    break
+                if msg.get('content_desc'):
+                    attrib = 'content-desc'
+                    name = msg['content_desc']
+                    break
+                if msg.get('textContains'):
+                    attrib = 'text'
+                    name = msg['textContains']
+                    textContains = True
+                    break
         Xpoint = None
         Ypoint = None
 
@@ -718,35 +741,23 @@ class Element(object):
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
             for attrib in msg:
-                try:
-                    if msg['resourceId'] != '':
-                        attrib = 'resource-id'
-                        name = msg['resourceId']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['text'] != '':
-                        attrib = 'text'
-                        name = msg['text']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['content_desc'] != '':
-                        attrib = 'content-desc'
-                        name = msg['content_desc']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['textContains'] != '':
-                        attrib = 'text'
-                        name = msg['textContains']
-                        textContains = True
-                        break
-                except:
-                    pass
+                if msg.get('resourceId'):
+                    attrib = 'resource-id'
+                    name = msg['resourceId']
+                    break
+                if msg.get('text'):
+                    attrib = 'text'
+                    name = msg['text']
+                    break
+                if msg.get('content_desc'):
+                    attrib = 'content-desc'
+                    name = msg['content_desc']
+                    break
+                if msg.get('textContains'):
+                    attrib = 'text'
+                    name = msg['textContains']
+                    textContains = True
+                    break
         Xpoint = None
         Ypoint = None
 
@@ -795,46 +806,41 @@ class Element(object):
              d(content_desc='乘')
         返回参数：{'index': '14', 'text': '×', 'resource-id': 'com.android.calculator2:id/op_mul', 'class': 'android.widget.Button', 'package': 'com.android.calculator2', 'content-desc': '乘', 'checkable': 'false', 'checked': 'false', 'clickable': 'true', 'enabled': 'true', 'focusable': 'true', 'focused': 'false', 'scrollable': 'false', 'long-clickable': 'false', 'password': 'false', 'selected': 'false', 'bounds': '[370,556][426,622]'}
         """
+        textContains = False
         if attrib and name:
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
             for attrib in msg:
-                try:
-                    if msg['resourceId'] != '':
-                        attrib = 'resource-id'
-                        name = msg['resourceId']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['text'] != '':
-                        attrib = 'text'
-                        name = msg['text']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['content_desc'] != '':
-                        attrib = 'content-desc'
-                        name = msg['content_desc']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['textContains'] != '':
-                        attrib = 'text'
-                        name = msg['textContains']
-                        break
-                except:
-                    pass
+                if msg.get('resourceId'):
+                    attrib = 'resource-id'
+                    name = msg['resourceId']
+                    break
+                if msg.get('text'):
+                    attrib = 'text'
+                    name = msg['text']
+                    break
+                if msg.get('content_desc'):
+                    attrib = 'content-desc'
+                    name = msg['content_desc']
+                    break
+                if msg.get('textContains'):
+                    attrib = 'text'
+                    name = msg['textContains']
+                    textContains = True
+                    break
         element_info = None
         self.__uidump()
         tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
         treeIter = tree.iter(tag="node")
         for elem in treeIter:
-            if name in elem.attrib[attrib]:
-                element_info = elem.attrib
-                break
+            if textContains:
+                if name in elem.attrib[attrib]:
+                    element_info = elem.attrib
+                    break
+            else:
+                if elem.attrib[attrib] == name:
+                    element_info = elem.attrib
+                    break
         return element_info
     # def infomation(self, msg):
     #     """
@@ -865,41 +871,149 @@ class Element(object):
         用法：d(('resourceId,'com.android.calculator2:id/op_mul'))
         返回参数：{'index': '14', 'text': '×', 'resource-id': 'com.android.calculator2:id/op_mul', 'class': 'android.widget.Button', 'package': 'com.android.calculator2', 'content-desc': '乘', 'checkable': 'false', 'checked': 'false', 'clickable': 'true', 'enabled': 'true', 'focusable': 'true', 'focused': 'false', 'scrollable': 'false', 'long-clickable': 'false', 'password': 'false', 'selected': 'false', 'bounds': '[370,556][426,622]'}
         """
+        textContains = False
         if attrib and name:
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
             for attrib in msg:
-                try:
-                    if msg['resourceId'] != '':
-                        attrib = 'resource-id'
-                        name = msg['resourceId']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['text'] != '':
-                        attrib = 'text'
-                        name = msg['text']
-                        break
-                except:
-                    pass
-                try:
-                    if msg['content_desc'] != '':
-                        attrib = 'content-desc'
-                        name = msg['content_desc']
-                        break
-                except:
-                    pass
+                if msg.get('resourceId'):
+                    attrib = 'resource-id'
+                    name = msg['resourceId']
+                    break
+                if msg.get('text'):
+                    attrib = 'text'
+                    name = msg['text']
+                    break
+                if msg.get('content_desc'):
+                    attrib = 'content-desc'
+                    name = msg['content_desc']
+                    break
+                if msg.get('textContains'):
+                    attrib = 'text'
+                    name = msg['textContains']
+                    textContains = True
+                    break
         element_info = None
         self.__uidump()
         tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
         treeIter = tree.iter(tag="node")
         for elem in treeIter:
-            if elem.attrib[attrib] == name:
-                element_info = elem.attrib
-                break
+            if textContains:
+                if name in elem.attrib[attrib]:
+                    element_info = elem.attrib
+                    break
+            else:
+                if elem.attrib[attrib] == name:
+                    element_info = elem.attrib
+                    break
         return True if element_info else False
 
+    # 正计时
+    def time_jishi(self, **kwargs):
+        '''
+        :param lineTmpla: 
+        :param mins: 多少秒后停止
+        :usage:  time_jishi(str="计时demo", text='设置', click=True)
+        '''
+        lineTmpla = kwargs['str'] + " %s "
+        return self.__time_jishi(lineTmpla, kwargs['text'] if kwargs.get('text') else '',
+                                 kwargs['resourceId'] if kwargs.get('resourceId') else '',
+                                 kwargs['content_desc'] if kwargs.get('content_desc') else '',
+                                 kwargs['textContains'] if kwargs.get('textContains') else '',
+                                 kwargs['icon_name'] if kwargs.get('icon_name') else '',
+                                 kwargs['confidence'] if kwargs.get('confidence') else '',
+                                 kwargs['timeout'] if kwargs.get('timeout') else 3600,
+                                 kwargs['click'] if kwargs.get('click') else '')
+    def __time_jishi(self, lineTmpla, text, resourceId, content_desc, textContains, icon_name, confidence, timeout, click):
+        count = 0
+        start_time = time.time()
+        if text:
+            if click:
+                while not self.click(text=text):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+            else:
+                while not self.exists(text=text):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+        elif resourceId:
+            if click:
+                while not self.click(resourceId=resourceId):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+            else:
+                while not self.exists(resourceId=resourceId):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+        elif content_desc:
+            if click:
+                while not self.click(content_desc=content_desc):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+            else:
+                while not self.exists(content_desc=content_desc):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+        elif textContains:
+            if click:
+                while not self.click(textContains=textContains):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+            else:
+                while not self.exists(textContains=textContains):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+        elif icon_name:
+            if click:
+                while not self.utils.find_icon_click(icon_name, confidence):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+            else:
+                while not self.utils.find_icon(icon_name, confidence):
+                    count += 1
+                    sys.stdout.write("\r" + lineTmpla % (count))
+                    sys.stdout.flush()
+                    if time.time() - start_time > timeout:
+                        print_color('超时%s秒，自动退出' % (timeout), 4)
+                        break
+        else:
+            print_color('缺少kwargs值', 4)
     def __elements(self, attrib, name):
         """
         同属性多个元素，返回坐标元组列表，[(x1, y1), (x2, y2)]
@@ -1176,6 +1290,10 @@ class Device(object):
     def adb_return(self, args):
         cmd = "%s %s %s" % (command, self.device_id, str(args))
         return subprocess.check_output(cmd).decode('utf8')
+    # os.system('adb 命令)
+    def adb_os_system(self, args):
+        cmd = "%s %s %s" % (command, self.device_id, str(args))
+        return os.system(cmd)
     def adb_os_popen(self, args):
         '''
         重写os.popen()方法,自带多线程效果
@@ -1205,6 +1323,10 @@ class Device(object):
     def shell_return_os_popen(self, args):
         cmd = "%s %s shell %s" % (command, self.device_id, str(args))
         return list(os.popen(cmd).readlines())[0].replace('\n','')
+    # 运行fastboot命令
+    def fastboot(self,args):
+        cmd = "%s %s %s" % (fastboot, self.device_id, str(args))
+        return subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # 获取udid ，判断设备是否连接
     def getUdid(self):
         try:
@@ -1231,6 +1353,7 @@ class Device(object):
                     return udid.strip()
         except MyError as e:
             print("Device Connect Fail:", e.value)
+
     def getDeviceState(self):
         """
         获取设备状态： offline | bootloader | device
@@ -1505,12 +1628,6 @@ class Device(object):
         重启设备
         """
         self.adb("reboot")
-
-    def fastboot(self):
-        """
-        进入fastboot模式
-        """
-        self.adb("reboot bootloader")
 
     def getSystemAppList(self):
         """

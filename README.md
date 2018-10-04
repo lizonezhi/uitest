@@ -77,8 +77,4 @@ print(d.getThirdappList())
 ```
 备注：如需打包exe，可注释掉__init__代码里的from uitest import aircv as ac, 能大幅减小exe包大小
 
-
-"# uitest" 
-"# uitest" 
-"# uitest" 
 "# uitest" 
