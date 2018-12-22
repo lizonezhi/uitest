@@ -29,7 +29,7 @@ system = platform.system()
 #     find_util = "findstr"
 # else:
 #     find_util = "grep"
-find_util = "grep"
+find_util = "findstr"
 # # 判断是否设置环境变量ANDROID_HOME
 # if "ANDROID_HOME" in os.environ:
 #     if system == "Windows":
@@ -156,7 +156,7 @@ def get_recovery_udid_list():
         return ''
 def get_fastboot_udid_list():
     '''
-    :return: recovery 界面的设备
+    :return: fastboot 界面的设备
     '''
     try:
         udid_list = []
@@ -178,7 +178,7 @@ def get_fastboot_udid_list():
         return ''
 def get_udid_list():
     '''
-    :return: adb devices 返回的设备(sideload和recover界面除外)
+    :return: adb devices 返回的设备(sideload和recovery界面除外)
     '''
     try:
         udid_list = []
@@ -360,7 +360,7 @@ def __time_jishi(lineTmpla, udid_all, device, recovery, sideload, fastboot, time
 
 def write_txt_file(name='name', content='content'):
     '''
-    写入文件到电脑本地
+    写入内容到电脑本地txt文件
     :param name:文件名  content：内容 
     :return: True or False 写入成功或失败
     ：usage： write_txt_file(name='记录日志', content='123')
@@ -372,6 +372,26 @@ def write_txt_file(name='name', content='content'):
         return True
     except:
         return False
+def read_txt_file(name='name'):
+    '''
+    写入文件到电脑本地
+    :param name:文件名  content：内容 
+    :return: True or False 写入成功或失败
+    ：usage： write_txt_file(name='记录日志', content='123')
+    '''
+    try:
+        list1 = []
+        f = open('%s.txt' % (name))
+        line = f.readline()
+        while line:
+            line = f.readline().replace('\n', '')
+            list1.append(line)
+            if line == '':
+                list1.remove('')
+        f.close()
+        return list1
+    except:
+        return ''
 # 判断是否为数字
 def is_number(s):
     '''
@@ -650,10 +670,13 @@ class Element(object):
              d(content_desc='乘')
         """
         textContains = False
+        timeout = 1
         if attrib and name:
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
             for attrib in msg:
+                if msg.get('timeout'):
+                    timeout = msg['timeout']
                 if msg.get('resourceId'):
                     attrib = 'resource-id'
                     name = msg['resourceId']
@@ -666,6 +689,10 @@ class Element(object):
                     attrib = 'content-desc'
                     name = msg['content_desc']
                     break
+                if msg.get('className'):
+                    attrib = 'class'
+                    name = msg['className']
+                    break
                 if msg.get('textContains'):
                     attrib = 'text'
                     name = msg['textContains']
@@ -673,35 +700,40 @@ class Element(object):
                     break
         Xpoint = None
         Ypoint = None
+        startTime = time.time()
+        while timeout:
+            self.__uidump()
+            tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
+            treeIter = tree.iter(tag="node")
+            for elem in treeIter:
+                if textContains:
+                    if name in elem.attrib[attrib]:
+                        # 获取元素所占区域坐标[x, y][x, y]
+                        bounds = elem.attrib["bounds"]
 
-        self.__uidump()
-        tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
-        treeIter = tree.iter(tag="node")
-        for elem in treeIter:
-            if textContains:
-                if name in elem.attrib[attrib]:
-                    # 获取元素所占区域坐标[x, y][x, y]
-                    bounds = elem.attrib["bounds"]
+                        # 通过正则获取坐标列表
+                        coord = self.pattern.findall(bounds)
 
-                    # 通过正则获取坐标列表
-                    coord = self.pattern.findall(bounds)
+                        # 求取元素区域中心点坐标
+                        Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
+                        Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
+                        timeout = 0
+                        break
+                else:
+                    if elem.attrib[attrib] == name:
+                        # 获取元素所占区域坐标[x, y][x, y]
+                        bounds = elem.attrib["bounds"]
 
-                    # 求取元素区域中心点坐标
-                    Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
-                    Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
-                    break
-            else:
-                if elem.attrib[attrib] == name:
-                    # 获取元素所占区域坐标[x, y][x, y]
-                    bounds = elem.attrib["bounds"]
+                        # 通过正则获取坐标列表
+                        coord = self.pattern.findall(bounds)
 
-                    # 通过正则获取坐标列表
-                    coord = self.pattern.findall(bounds)
-
-                    # 求取元素区域中心点坐标
-                    Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
-                    Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
-                    break
+                        # 求取元素区域中心点坐标
+                        Xpoint = (int(coord[2]) - int(coord[0])) / 2.0 + int(coord[0])
+                        Ypoint = (int(coord[3]) - int(coord[1])) / 2.0 + int(coord[1])
+                        timeout = 0
+                        break
+            if time.time() - startTime > timeout:
+                break
 
         if Xpoint is None or Ypoint is None:
             return False
@@ -807,10 +839,13 @@ class Element(object):
         返回参数：{'index': '14', 'text': '×', 'resource-id': 'com.android.calculator2:id/op_mul', 'class': 'android.widget.Button', 'package': 'com.android.calculator2', 'content-desc': '乘', 'checkable': 'false', 'checked': 'false', 'clickable': 'true', 'enabled': 'true', 'focusable': 'true', 'focused': 'false', 'scrollable': 'false', 'long-clickable': 'false', 'password': 'false', 'selected': 'false', 'bounds': '[370,556][426,622]'}
         """
         textContains = False
+        timeout = 1
         if attrib and name:
             attrib = attrib.replace('resourceId', 'resource-id').replace('description', 'content-desc')
         else:
             for attrib in msg:
+                if msg.get('timeout'):
+                    timeout = msg['timeout']
                 if msg.get('resourceId'):
                     attrib = 'resource-id'
                     name = msg['resourceId']
@@ -823,24 +858,35 @@ class Element(object):
                     attrib = 'content-desc'
                     name = msg['content_desc']
                     break
+                if msg.get('className'):
+                    attrib = 'class'
+                    name = msg['className']
+                    break
                 if msg.get('textContains'):
                     attrib = 'text'
                     name = msg['textContains']
                     textContains = True
                     break
-        element_info = None
-        self.__uidump()
-        tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
-        treeIter = tree.iter(tag="node")
-        for elem in treeIter:
-            if textContains:
-                if name in elem.attrib[attrib]:
-                    element_info = elem.attrib
-                    break
-            else:
-                if elem.attrib[attrib] == name:
-                    element_info = elem.attrib
-                    break
+        Xpoint = None
+        Ypoint = None
+        startTime = time.time()
+        while timeout:
+            self.__uidump()
+            tree = ET.ElementTree(file=PATH("%s/uidump.xml" % self.tempFile))
+            treeIter = tree.iter(tag="node")
+            for elem in treeIter:
+                if textContains:
+                    if name in elem.attrib[attrib]:
+                        element_info = elem.attrib
+                        timeout = 0
+                        break
+                else:
+                    if elem.attrib[attrib] == name:
+                        element_info = elem.attrib
+                        timeout = 0
+                        break
+            if time.time() - startTime > timeout:
+                break
         return element_info
     # def infomation(self, msg):
     #     """
@@ -913,7 +959,7 @@ class Element(object):
         '''
         :param lineTmpla: 
         :param mins: 多少秒后停止
-        :usage:  time_jishi(str="计时demo", text='设置', click=True)
+        :usage:  time_jishi(str="等待", text='交易成功', click=True)
         '''
         lineTmpla = kwargs['str'] + " %s "
         return self.__time_jishi(lineTmpla, kwargs['text'] if kwargs.get('text') else '',
@@ -1416,7 +1462,7 @@ class Device(object):
 
     def getSdkVersion(self):
         """
-        获取设备SDK版本号
+        获取设备SDK版本号,如19
         """
         return self.shell("getprop ro.build.version.sdk").stdout.read().strip().decode('utf8')
 
@@ -1508,7 +1554,7 @@ class Device(object):
         return MemFree.replace('\r\r\n','').strip()
     def getCpuHardware(self):
         """
-        获取剩余内存
+        获取cpu型号
         """
         Hardware = self.shell("cat proc/cpuinfo | %s Hardware" % find_util).stdout.read().decode('utf8').split(":")[-1]
 
@@ -1522,7 +1568,7 @@ class Device(object):
         return int(level)
     def getBatteryVoltage(self):
         """
-        获取电池电压
+        获取电池电压,单位mV毫伏
         """
         voltage = self.shell("dumpsys battery | %s voltage" % find_util).stdout.read().decode('utf8').split(": ")[-1]
 
@@ -1552,7 +1598,7 @@ class Device(object):
 
     def getBatteryStatus(self):
         """
-        获取电池充电状态 #电池状态：2：充电状态 ，其他数字为非充电状态
+        获取电池充电状态 ：2：充电状态 ，其他数字为非充电状态
         BATTERY_STATUS_UNKNOWN：未知状态
         BATTERY_STATUS_CHARGING: 充电状态
         BATTERY_STATUS_DISCHARGING: 放电状态
@@ -1614,7 +1660,7 @@ class Device(object):
 
     def screenshot(self, fileName=None):
         """
-        截图，保存到脚本目录
+        截图，保存到脚本"tmp\screenshot"目录里
         usage: adb.screenchot('screenshot.png')
         win 7不自动创建文件夹，所有要先判断然后创建
         """
@@ -1680,7 +1726,7 @@ class Device(object):
 
     def isInstall(self, packageName):
         """
-        判断应用是否安装，已安装返回True，否则返回False
+        根据包名判断应用是否安装，已安装返回True，否则返回False
         usage: isInstall("com.example.apidemo")
         """
         if self.getMatchingAppList(packageName):
@@ -1702,9 +1748,10 @@ class Device(object):
         usage: clearAppData("com.android.contacts")
         """
         if "Success" in self.shell_return("pm clear %s" % packageName):
-            return "clear user data success "
+            return True
         else:
-            return "make sure package exist"
+            return False
+            return "清除缓存数据失败，请确认应用是否存在"
 
     def clearCurrentApp(self):
         """
@@ -1718,15 +1765,15 @@ class Device(object):
     def startActivity(self, component):
         """
         启动一个Activity
-        usage: startActivity(component = "com.android.settinrs/.Settings")
+        usage: startActivity("com.android.settinrs/.Settings")
         """
-        self.shell("am start -n %s" % component)
+        self.shell_return("am start %s" % component)
     def start_app(self, packageName):
         """
         启动一个应用
-        usage: start_app(packageName = "com.android.settings")
+        usage: start_app("com.android.settings")
         """
-        self.shell("monkey -p %s -c android.intent.category.LAUNCHER 1" % packageName)
+        self.shell_return("monkey -p %s -c android.intent.category.LAUNCHER 1" % packageName)
 
     def startWebpage(self, url):
         """
@@ -1762,7 +1809,7 @@ class Device(object):
     def click_element(self, element):
         """
         点击元素
-        usage: touchByElement(Element().findElementByName(u"计算器"))
+        usage: click_element(Element().findElementByName(u"计算器"))
         """
         self.shell("input tap %s %s" % (str(element[0]), str(element[1])))
 
@@ -1787,12 +1834,12 @@ class Device(object):
         usage: swipe(0.9, 0.5, 0.1, 0.5) 左滑
         """
         if start_ratioWidth < 1:
-            self.shell("input swipe %s %s %s %s %s" % (
+            self.shell_return("input swipe %s %s %s %s %s" % (
             str(start_ratioWidth * self.getScreenResolution()[0]), str(start_ratioHigh * self.getScreenResolution()[1]), \
             str(end_ratioWidth * self.getScreenResolution()[0]), str(end_ratioHigh * self.getScreenResolution()[1]),
             str(duration)))
         elif start_ratioWidth >= 1:
-            self.shell("input swipe %s %s %s %s %s" % (
+            self.shell_return("input swipe %s %s %s %s %s" % (
             start_ratioWidth, start_ratioHigh, end_ratioWidth, end_ratioHigh, str(duration)))
 
     def swipeToLeft(self):
@@ -1821,7 +1868,7 @@ class Device(object):
 
     def click_long(self, x, y,duration=None):
         """
-        长按屏幕的某个坐标位置, Android 4.4
+        长按屏幕的某个坐标位置, Android 4.4及以上
         usage: click_long(500, 600)
                click_long(0.5, 0.5)
         """
@@ -1846,7 +1893,7 @@ class Device(object):
         发送一段文本，只能包含英文字符和空格
         usage: setText("i am unique")
         """
-        self.shell('input text "%s"' % (string))
+        self.shell_return('input text "%s"' % (string))
 
     # 获取内存,并写入到txt中记录
     def get_meminfo_heap(self, packageName):
@@ -1896,17 +1943,20 @@ class Device(object):
         except:
             self.print_before('screenshot_err_no_open失败')
             pass
-    def push(self, local, remote):
+    def push(self, local, remote, override=True):
         '''
         push电脑本地文件到手机
         :param pc_file: 
         :param remote: 
         :return: 
         '''
-        self.adb_return('push %s %s' % (local, remote))
+        if self.is_remote_file_exist(remote) and not override:
+            pass
+        else:
+            self.adb_return('push %s %s' % (local, remote))
     def is_remote_file_exist(self, remote):
         '''
-        判断手机内部文件是否存在
+        判断手机内部文件是否存在,查看手机内部文件是否存在
         :param remote: 
         :return: 存在 Ture;不存在 False
         '''
@@ -1955,6 +2005,7 @@ class Device(object):
     def screen_on(self):
         self.sendKeyEvent(keycode=224)
         if Element().info(resourceId='com.android.systemui:id/lock_icon'):
+            self.sendKeyEvent(keycode=224)
             self.swipeToUp()
     # 熄灭屏幕
     def screen_off(self):
@@ -1963,6 +2014,14 @@ class Device(object):
     def is_screen_on(self):
         output = self.shell_return("dumpsys power")
         return 'mHoldingDisplaySuspendBlocker=true' in output
+
+    # 判断WiFi是否打开
+    def is_wifi_on(self):
+        wifi_on = self.shell_return('settings get global wifi_on').replace('\r','').replace('\n','')
+        if wifi_on == '1':
+            return True
+        else:
+            return False
 
     def getH5PackageName(self):
         '''
@@ -2006,7 +2065,7 @@ class Device(object):
                 return mac
         except:
             return ''
-    # 获取指定设备已装包名版本信息
+    # 获取设备里已装程序版本信息
     def getVersionName(self, packageName):
         '''
         :param packageName: 包名
