@@ -2219,3 +2219,14 @@ class Device(object):
         print('接收数据package_rx_bytes:', package_rx_bytes, '传输数据package_tx_bytes:', package_tx_bytes)
         return [package_rx_bytes, package_tx_bytes, round(package_rx_bytes/1024), round(package_tx_bytes/1024), round((package_rx_bytes+package_tx_bytes)/1024/1024)]
 
+import json
+# 支持自动序列化的基类
+class archive_json(object):
+    def from_json(self, json_str):
+        obj = json.loads(json_str)
+        for key in vars(self):
+            if key in obj:
+                setattr(self, key, obj[key])
+
+    def to_json(self):
+        return json.dumps(vars(self))
