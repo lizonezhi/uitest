@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name='uitest',
-    version='0.1.1',
+    version='0.1.2',
     packages=['uitest'],
     url='https://github.com/lizonezhi/uitest.git',
     license='1.0',
