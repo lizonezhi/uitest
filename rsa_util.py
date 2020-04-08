@@ -17,15 +17,15 @@ class RsaUtil(object):
 
         rsaUtil = RsaUtil()
 
-        encrypy_result = rsaUtil.encrypt_by_public_key(message.encode()).decode()
+        encrypy_result = rsaUtil.encrypt_by_public_key(message.encode())
         print("加密结果：>>> ")
         print(encrypy_result)
 
-        decrypt_result = rsaUtil.decrypt_by_private_key(encrypy_result).decode()
+        decrypt_result = rsaUtil.decrypt_by_private_key(encrypy_result)
         print("解密结果：>>> ")
         print(decrypt_result)
 
-        sign = rsaUtil.sign_by_private_key(message).decode()
+        sign = rsaUtil.sign_by_private_key(message)
         print("签名结果：>>> ")
         print(sign)
 
@@ -38,12 +38,13 @@ class RsaUtil(object):
     # 初始化key
     def __init__(self,
                  company_pub_file=PUBLIC_KEY_PATH,
-                 company_pri_file=PRIVATE_KEY_PATH):
+                 company_pri_file=PRIVATE_KEY_PATH, hash_method='SHA-1'):
 
         if company_pub_file:
             self.company_public_key = rsa.PublicKey.load_pkcs1_openssl_pem(open(company_pub_file).read().encode())
         if company_pri_file:
             self.company_private_key = rsa.PrivateKey.load_pkcs1(open(company_pri_file).read().encode())
+        self.hash_method = hash_method
 
     def get_max_length(self, rsa_key, encrypt=True):
         """加密内容过长时 需要分段加密 换算每一段的长度.
@@ -70,7 +71,7 @@ class RsaUtil(object):
             message = message[max_length:]
             out = rsa.encrypt(input, self.company_public_key)
             encrypt_result += out
-        encrypt_result = base64.b64encode(encrypt_result)
+        encrypt_result = base64.b64encode(encrypt_result).decode()
         return encrypt_result
 
     def decrypt_by_private_key(self, message):
@@ -87,7 +88,7 @@ class RsaUtil(object):
             decrypt_message = decrypt_message[max_length:]
             out = rsa.decrypt(input, self.company_private_key)
             decrypt_result += out
-        return decrypt_result
+        return decrypt_result.decode()
 
     # 签名 商户私钥 base64转码
     def sign_by_private_key(self, data):
@@ -96,8 +97,8 @@ class RsaUtil(object):
             使用SHA-1 方法进行签名（也可以使用MD5）
             签名之后，需要转义后输出
         """
-        signature = rsa.sign(str(data).encode(), self.company_private_key, hash_method='SHA-1')
-        return base64.b64encode(signature)
+        signature = rsa.sign(str(data).encode(), self.company_private_key, hash_method=self.hash_method)
+        return base64.b64encode(signature).decode()
 
     def verify_by_public_key(self, message, signature):
         """公钥验签.
