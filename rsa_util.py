@@ -65,6 +65,7 @@ class RsaUtil(object):
             加密之后需要对接过进行base64转码
         """
         encrypt_result = b''
+        message = message.encode()
         max_length = self.get_max_length(self.company_public_key)
         while message:
             input = message[:max_length]
@@ -80,7 +81,7 @@ class RsaUtil(object):
             解密之后的内容直接是字符串，不需要在进行转义
         """
         decrypt_result = b""
-
+        message = message.encode()
         max_length = self.get_max_length(self.company_private_key, False)
         decrypt_message = base64.b64decode(message)
         while decrypt_message:

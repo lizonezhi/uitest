@@ -1522,22 +1522,38 @@ class Device(object):
         """
         获取当前应用界面的包名和Activity，返回的字符串格式为：packageName/activityName
         """
-        pattern = re.compile(r"[a-zA-Z0-9\.]+/.[a-zA-Z0-9\.]+")
-        out = self.shell("dumpsys window w | %s \/ | %s name=" % (find_util, find_util)).stdout.read()
+        # pattern = re.compile(r"[a-zA-Z0-9\.]+/.[a-zA-Z0-9\.]+")
+        # out = self.shell("dumpsys window w | %s \/ | %s name=" % (find_util, find_util)).stdout.read()
+        # 
+        # return pattern.findall(out.decode('utf8'))[0]
 
-        return pattern.findall(out.decode('utf8'))[0]
+        packageName = subprocess.check_output(
+            'adb -s %s shell dumpsys activity top | grep ACTIVITY' % (getUdid())).decode()
+        packageName_list = packageName.split('ACTIVITY')
+        packageName = packageName_list[-1]
+        
+        packageName = packageName.strip()
+        packageName = ' '.join(packageName.split(' ')[:1])
+        return packageName
 
     def getCurrentPackageName(self):
         """
         获取当前运行的应用的包名
         """
-        return self.getFocusedPackageAndActivity().split("/")[0]
+        # return self.getFocusedPackageAndActivity().split("/")[0]
+
+        
+        packageName = '/'.join(self.getFocusedPackageAndActivity().split('/')[:1])
+        return packageName
 
     def getCurrentActivity(self):
         """
         获取当前运行应用的activity
         """
-        return self.getFocusedPackageAndActivity().split("/")[-1]
+        # return self.getFocusedPackageAndActivity().split("/")[-1]
+
+        packageName = self.getFocusedPackageAndActivity().split('/')[1]
+        return packageName
     def getMemTotal(self):
         """
         获取最大内存
