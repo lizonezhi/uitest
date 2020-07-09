@@ -4,6 +4,7 @@
 __author__ = "lzz"
 '''
 参考：
+https://github.com/openatx/uiautomator2
 https://github.com/gb112211/Adb-For-Test
 项目地址：https://github.com/lizonezhi/uitest
 支持python3.6
@@ -357,11 +358,54 @@ def __time_jishi(lineTmpla, udid_all, device, recovery, sideload, fastboot, time
             if time.time() - start_time > timeout:
                 print_color('超时%s秒，自动退出' % (timeout), 4)
                 break
-
+def get_local_ip(LAN=False):
+    '''
+        获取电脑本地ip地址
+        LAN = True 时表示获取192.168开头的局域网ip
+    '''
+    import psutil
+    ip = ''
+    try:
+        for k, v, in psutil.net_if_addrs().items():
+            if "无线" in k or "WLAN" in k or "以太" in k:
+                for item in v:
+                    ip_tmp = item[1]
+                    try:
+                        if LAN:
+                            ip = re.search('(192)\.(168)\.([\d]{1,3}\.){1}[\d]{1,3}', ip_tmp).group()
+                        else:
+                            ip = re.search('([\d]{1,3}\.){3}[\d]{1,3}', ip_tmp).group()
+                        if ip:
+                            break
+                    except:
+                        pass
+    except Exception as e:
+        print('Exception:' + e.args)
+    return ip
+def print_log(content='content', path='log/'):
+    '''
+    写入内容到电脑本地txt文件，指定路径
+    :param name:文件名  content：内容
+    :return: True or False 写入成功或失败
+    ：usage： write_txt_file(name='记录日志', content='123')
+    '''
+    try:
+        # 获取今天的字符串
+        time_ymd = time.strftime("%Y-%m-%d", time.localtime(time.time()))
+        time_ymdhms = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+        msg = time_ymdhms + "  ：" + content + '\n'
+        if not os.path.isdir(path):
+            os.makedirs(path, exist_ok=True)
+        f = open(path + '%s.log' % (time_ymd), 'a')
+        f.write('%s \n' % (msg))
+        f.close()
+        return True
+    except:
+        return False
 def write_txt_file(name='name', content='content'):
     '''
     写入内容到电脑本地txt文件
-    :param name:文件名  content：内容 
+    :param name:文件名  content：内容
     :return: True or False 写入成功或失败
     ：usage： write_txt_file(name='记录日志', content='123')
     '''
@@ -375,7 +419,7 @@ def write_txt_file(name='name', content='content'):
 def read_txt_file(name='name'):
     '''
     写入文件到电脑本地
-    :param name:文件名  content：内容 
+    :param name:文件名  content：内容
     :return: True or False 写入成功或失败
     ：usage： write_txt_file(name='记录日志', content='123')
     '''
@@ -1711,6 +1755,16 @@ class Device(object):
 
         return thirdApp
 
+    def getInstalledAppList(self):
+        """
+        获取设备中所有安装的应用包名列表
+        """
+        thirdApp = []
+        for packages in self.shell("pm list packages").stdout.readlines():
+            thirdApp.append(packages.decode('utf8').split(":")[-1].splitlines()[0])
+
+        return thirdApp
+
     def getMatchingAppList(self, keyword):
         """
         模糊查询与keyword匹配的应用包名列表
@@ -1745,7 +1799,13 @@ class Device(object):
         根据包名判断应用是否安装，已安装返回True，否则返回False
         usage: isInstall("com.example.apidemo")
         """
-        if self.getMatchingAppList(packageName):
+        matApp = []
+        for packages in self.shell("pm list packages %s" % packageName).stdout.readlines():
+            package = packages.decode('utf8').split(":")[-1].splitlines()[0]
+            if package == packageName:
+                matApp.append(package)
+                break
+        if matApp:
             return True
         else:
             return False
@@ -2020,9 +2080,9 @@ class Device(object):
     # 点亮解锁屏幕
     def screen_on(self):
         self.sendKeyEvent(keycode=224)
-        if Element().info(resourceId='com.android.systemui:id/lock_icon'):
-            self.sendKeyEvent(keycode=224)
-            self.swipeToUp()
+        # if Element().info(resourceId='com.android.systemui:id/lock_icon'):
+        #     self.sendKeyEvent(keycode=224)
+        #     self.swipeToUp()
     # 熄灭屏幕
     def screen_off(self):
         self.sendKeyEvent(keycode=223)
@@ -2088,6 +2148,8 @@ class Device(object):
         :return: 0内部版本号、1版本名、2首次安装时间、3上次安装时间、4data/app/路径、5是否拆分
         '''
         if packageName != '':
+            if not self.isInstall(packageName):
+                return []
             versionName = self.shell_return(
                 'dumpsys package %s | grep versionName' % (packageName)).replace(
                 '\n', '').replace('\r', '').strip()
@@ -2124,6 +2186,8 @@ class Device(object):
                 splits = True
             resourcePath = resourcePath.replace('resourcePath=','')
             return [versionName, versionCode, versionFirstTime, versionTime, resourcePath, splits]
+        else:
+            return []
     # 获取sn号
     def get_sn(self):
         serialno = self.shell_return('getprop persist.sys.product.serialno').replace(
