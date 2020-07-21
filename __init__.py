@@ -17,6 +17,7 @@ import platform
 import subprocess
 import re
 import time
+import datetime
 
 import xml.etree.cElementTree as ET
 
@@ -2298,6 +2299,33 @@ class Device(object):
             package_tx_bytes += int(i[7])
         print('接收数据package_rx_bytes:', package_rx_bytes, '传输数据package_tx_bytes:', package_tx_bytes)
         return [package_rx_bytes, package_tx_bytes, round(package_rx_bytes/1024), round(package_tx_bytes/1024), round((package_rx_bytes+package_tx_bytes)/1024/1024)]
+
+    # 判断设备是否root
+    def is_root(self):
+        if 'cannot' in self.adb_return('root'):
+            return False
+        else:
+            return True
+
+    # 获取设备开机时间
+    def get_boot_time(self):
+        s_1970 = self.shell_return('cat proc/stat | grep btime')# 1970秒数
+        s_1970 = s_1970.replace('btime ', '').replace('\r', '').replace('\n', '')
+        timeArray = time.localtime(int(s_1970))
+        us_time = time.strftime("%Y-%m-%d %H:%M:%S", timeArray)
+        return datetime.datetime.strptime(us_time, "%Y-%m-%d %H:%M:%S")
+
+    # 获取设备已开机时间
+    def get_has_boot_time(self, show='s'):
+        s_1970 = self.shell_return('cat proc/stat | grep btime')  # 1970秒数
+        s_1970 = s_1970.replace('btime ', '').replace('\r', '').replace('\n', '')
+        time_s = time.time() - float(s_1970)
+        if show == 's':
+            return round(time_s, 3)
+        elif show == 'm':
+            return round(time_s / 60, 2)
+        elif show == 'h':
+            return round(time_s / 60 / 60, 1)
 
 import json
 # 支持自动序列化的基类
