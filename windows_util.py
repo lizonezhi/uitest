@@ -2,6 +2,7 @@
 # coding=utf-8
 
 import psutil
+import win32clipboard as w
 import win32api
 import win32con
 import win32gui
@@ -213,9 +214,16 @@ class WindowsAutomator:
             win32api.keybd_event(self.VK_CODE[c], 0, win32con.KEYEVENTF_KEYUP, 0)
             time.sleep(0.01)
 
+    # 按键事件
     def key_event(self, KEY_CODE):
+        # 按下
         win32api.keybd_event(KEY_CODE, 0, 0, 0)
+        # 抬起
+        win32api.keybd_event(KEY_CODE, 0, win32con.KEYEVENTF_KEYUP, 0)
 
+    # 按回车键
+    def key_event_enter(self):
+        self.key_event(self.VK_CODE['enter'])
 
 class Log(object):
     '''
@@ -358,12 +366,13 @@ class Log(object):
 
 class WindowsUtil:
 
-    def get_local_ip(self, LAN=False):
+    def get_local_ip(self, LAN=False, get_list=False):
         '''
             获取电脑本地ip地址
             LAN = True 时表示获取192.168开头的局域网ip
         '''
         ip = ''
+        ip_list = []
         try:
             for k, v, in psutil.net_if_addrs().items():
                 if "无线" in k or "WLAN" in k or "以太" in k:
@@ -374,13 +383,17 @@ class WindowsUtil:
                                 ip = re.search('(1[97]2)\.([\d]{1,3}\.){2}[\d]{1,3}', ip_tmp).group()
                             else:
                                 ip = re.search('([\d]{1,3}\.){3}[\d]{1,3}', ip_tmp).group()
-                            if ip:
+                            ip_list.append(ip)
+                            if ip and not get_list:
                                 break
                         except:
                             pass
         except Exception as e:
             print('Exception:' + e.args)
-        return ip
+        if get_list:
+            return ip_list
+        else:
+            return ip
 
     def write_txt_file(self, name='name', content='content', path=''):
         '''
@@ -448,3 +461,50 @@ class WindowsUtil:
             ct = win32api.GetConsoleTitle()
             hd = win32gui.FindWindow(0, ct)
             win32gui.ShowWindow(hd, 1)
+
+    def setText(self, aString):
+        '''
+            写入剪切板
+        '''
+        w.OpenClipboard()
+        w.EmptyClipboard()
+        w.SetClipboardData(win32con.CF_UNICODETEXT, aString)
+        w.CloseClipboard()
+
+    def pasteText(self):
+        '''
+            自动粘贴剪切板中的内容
+        '''
+        win32api.keybd_event(17, 0, 0, 0)  # ctrl的键位码是17
+        win32api.keybd_event(86, 0, 0, 0)  # v的键位码是86
+        win32api.keybd_event(86, 0, win32con.KEYEVENTF_KEYUP, 0)  # 释放按键
+        win32api.keybd_event(17, 0, win32con.KEYEVENTF_KEYUP, 0)
+
+    def get_new_file_name(self, path, file_name):
+        '''
+            返回重命名的文件名,按照（1）（1）格式拼接，保存文件时用
+            path: 扫描的目录
+            file_name：文件名
+        '''
+        g = os.walk(path)
+        file_name_list = []
+        for path, dir_list, file_list in g:
+            for file_name in file_list:
+                file_name_list.append(str(file_name))
+
+        new_file_name = file_name
+        count = 0
+        while new_file_name in file_name_list:
+            count = count + 1
+            new_file_name_split = new_file_name.split('.')
+            tail = ''
+            file_name_body = ''
+            file_name_tail = ''
+            if len(new_file_name_split) > 1:
+                tail = new_file_name_split[-1]
+                file_name_body = new_file_name[:-(len(tail) + 1)]
+                file_name_tail = '.' + tail
+            else:
+                file_name_body = new_file_name
+            new_file_name = file_name_body + '（' + str(count) + '）' + file_name_tail
+        return new_file_name
