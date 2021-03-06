@@ -10,7 +10,7 @@ https://github.com/gb112211/Adb-For-Test
 支持python3.6
 目前功能无需在手机上装任何程序
 '''
-import tempfile
+
 import os
 import sys
 import platform
@@ -18,9 +18,11 @@ import subprocess
 import re
 import time
 import datetime
-
+import io
+from uitest.utils import list_util
+import tempfile
 import xml.etree.cElementTree as ET
-
+from uitest import aircv as ac
 command = 'adb'
 fastboot = 'fastboot'
 PATH = lambda p: os.path.abspath(p)
@@ -31,7 +33,8 @@ system = platform.system()
 #     find_util = "findstr"
 # else:
 #     find_util = "grep"
-find_util = "findstr"
+find_util = "grep"
+shell_return_find_util = "findstr"
 # # 判断是否设置环境变量ANDROID_HOME
 # if "ANDROID_HOME" in os.environ:
 #     if system == "Windows":
@@ -546,7 +549,7 @@ class _wrap_close:
         returncode = self._proc.wait()
         if returncode == 0:
             return None
-        if name == 'nt':
+        if os.name == 'nt':
             return returncode
         else:
             return returncode << 8  # Shift left to match old behavior
@@ -558,9 +561,9 @@ class _wrap_close:
         return getattr(self._stream, name)
     def __iter__(self):
         return iter(self._stream)
-def os_popen(cmd):
+def popen(cmd):
     '''
-    重写os.popen()方法
+    重写os.popen()方法，获取cmd命令的返回
     :param cmd: 
     :return: 
     usage： push_result = d.os_popen('-s %s push %s /data/local/tmp/tmp_apk.apk' % (udid, apk))
@@ -569,13 +572,81 @@ def os_popen(cmd):
     '''
     if not isinstance(cmd, str):
         raise TypeError("invalid cmd type (%s, expected string)" % type(cmd))
-    import io
+    proc = subprocess.Popen(cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stdin=subprocess.PIPE,
+                            stderr = subprocess.STDOUT,
+                            bufsize=-1)
+    return _wrap_close(io.TextIOWrapper(proc.stdout), proc)
+def popen_close(cmd):
+    '''
+    重写os.popen()方法，获取cmd命令的返回，并关闭流
+    :param cmd:
+    :return: list
+    usage： push_result = d.os_popen('-s %s push %s /data/local/tmp/tmp_apk.apk' % (udid, apk))
+    '''
+    if not isinstance(cmd, str):
+        raise TypeError("invalid cmd type (%s, expected string)" % type(cmd))
+    proc = subprocess.Popen(cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stdin=subprocess.PIPE,
+                            stderr = subprocess.STDOUT,
+                            bufsize=-1)
+    result_close = _wrap_close(io.TextIOWrapper(proc.stdout), proc)
+    result = result_close.readlines()
+    result_list = list_util.ListUtil().strip(result)#返回的list中没有换行符和''
+    result_close.close()
+    return result_list
+def subprocess_Popen(cmd):
+    '''
+    重写os.popen()方法，获取cmd命令的返回
+    支持读取 utf8 字符
+    :param cmd:
+    :return: list
+    usage： push_result = uitest.subprocess_Popen('-s %s push %s /data/local/tmp/tmp_apk.apk' % (udid, apk))
+    '''
+    if not isinstance(cmd, str):
+        raise TypeError("invalid cmd type (%s, expected string)" % type(cmd))
+    proc = subprocess.Popen(cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stdin=subprocess.PIPE,
+                            stderr = subprocess.STDOUT,
+                            bufsize=-1
+                            )
+    result = proc.stdout.read().decode("utf-8")
+    result_list = list_util.ListUtil().strip(result.split('\r\n'))#返回的list中没有换行符和''
+    return result_list
+def os_popen(cmd):
+    '''
+    重写os.popen()方法
+    :param cmd:
+    :return:
+    usage： push_result = d.os_popen('-s %s push %s /data/local/tmp/tmp_apk.apk' % (udid, apk))
+            此处可以运行其它命令
+            push_result.close()
+    '''
+    if not isinstance(cmd, str):
+        raise TypeError("invalid cmd type (%s, expected string)" % type(cmd))
     cmd = '%s %s' % (command, cmd)
     proc = subprocess.Popen(cmd,
                             shell=True,
                             stdout=subprocess.PIPE,
+                            stdin=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
                             bufsize=-1)
     return _wrap_close(io.TextIOWrapper(proc.stdout), proc)
+
+def check_output(cmd):
+    result = ''
+    try:
+        result_str = subprocess.check_output(cmd).decode('utf8')
+    except:
+        pass
+    return result_str
+
 class MyError(Exception):
     def __init__(self, value):
         self.value = value
@@ -1375,12 +1446,17 @@ class Device(object):
     # adb命令
     def adb(self, args):
         cmd = "%s %s %s" % (command, self.device_id, str(args))
-        return subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return popen_close(cmd)
 
     # adb 命令,返回运行结果
     def adb_return(self, args):
         cmd = "%s %s %s" % (command, self.device_id, str(args))
-        return subprocess.check_output(cmd).decode('utf8')
+        result = ''
+        try:
+            result = subprocess.check_output(cmd).decode('utf8')
+        except:
+            pass
+        return result
     # os.system('adb 命令)
     def adb_os_system(self, args):
         cmd = "%s %s %s" % (command, self.device_id, str(args))
@@ -1394,30 +1470,34 @@ class Device(object):
                 此处可以运行其它命令
                 push_result.close()
         '''
-        import io
         cmd = "%s %s %s" % (command, self.device_id, str(args))
-        proc = subprocess.Popen(cmd,
-                                shell=True,
-                                stdout=subprocess.PIPE,
-                                bufsize=-1)
-        return _wrap_close(io.TextIOWrapper(proc.stdout), proc)
+        return popen(cmd)
     # adb shell命令
     def shell(self, args):
+        '''
+        注意：用完需要关闭 close()
+        '''
         cmd = "%s %s shell %s" % (command, self.device_id, str(args))
-        return subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return popen(cmd)
 
     # adb shell命令,返回运行结果
     def shell_return(self, args):
         cmd = "%s %s shell %s" % (command, self.device_id, str(args))
-        return subprocess.check_output(cmd).decode('utf8')
-    # adb shell命令,返回运行结果.比如adb shell ls sdcard/dd.txt的返回，上面获取不了
+        result = ''
+        try:
+            result = subprocess.check_output(cmd).decode('utf8')
+        except:
+            pass
+        return result
+    # adb shell命令,返回运行结果.比如adb shell ls sdcard/deviceid.txt的返回，上面获取不了
     def shell_return_os_popen(self, args):
         cmd = "%s %s shell %s" % (command, self.device_id, str(args))
-        return list(os.popen(cmd).readlines())[0].replace('\n','')
+        # return list(os.popen(cmd).readlines())[0].replace('\n','')
+        return popen_close(cmd)
     # 运行fastboot命令
     def fastboot(self,args):
         cmd = "%s %s %s" % (fastboot, self.device_id, str(args))
-        return subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return popen(cmd)
     # 获取udid ，判断设备是否连接
     def getUdid(self):
         try:
@@ -1449,13 +1529,13 @@ class Device(object):
         """
         获取设备状态： offline | bootloader | device
         """
-        return self.adb("get-state").stdout.read().strip().decode('utf8')
+        return self.adb("get-state")[0].replace('\n', '')
 
     def get_serialno(self):
         """
         获取设备id号，return serialNo
         """
-        return self.adb("get-serialno").stdout.read().strip().decode('utf8')
+        return self.adb("get-serialno")[0].replace('\n', '')
 
     def get_value(self,value, str):
         '''
@@ -1478,7 +1558,7 @@ class Device(object):
         return name
     # 获取设备信息，大方法
     def get_device_info(self):
-        device_info = self.shell("getprop").stdout.read().strip().decode('utf8').replace('\r\r\n',',').replace('[','').replace(']','').replace(':','=').replace(' ','')
+        device_info = self.shell_return("getprop").strip().replace('\r\r\n',',').replace('[','').replace(']','').replace(':','=').replace(' ','')
         device_info = device_info.replace(',',' ')
 
         '''
@@ -1497,30 +1577,36 @@ class Device(object):
         """
         获取设备中的Android版本号，如4.2.2
         """
-        return self.shell("getprop ro.build.version.release").stdout.read().strip().decode('utf8')
+        return self.shell_return("getprop ro.build.version.release").strip()
 
     def get_brand(self):
         """
         获取Android平台型号品牌
         """
-        return self.shell("getprop ro.boot.hardware").stdout.read().strip().decode('utf8')
+        return self.shell_return("getprop ro.boot.hardware").strip()
+
+    def getCpuAbi(self):
+        """
+        获取cpu体系结构
+        """
+        return self.shell_return("getprop ro.product.cpu.abi").strip()
 
     def getSdkVersion(self):
         """
         获取设备SDK版本号,如19
         """
-        return self.shell("getprop ro.build.version.sdk").stdout.read().strip().decode('utf8')
+        return self.shell_return("getprop ro.build.version.sdk").strip()
 
     def getDeviceModel(self):
         """
         获取设备型号
         """
-        return self.shell("getprop ro.product.model").stdout.read().strip().decode('utf8')
+        return self.shell_return("getprop ro.product.model").strip()
     def getOsVersion(self):
         """
         获取os版本
         """
-        return self.shell("getprop ro.build.id").stdout.read().strip().decode('utf8')
+        return self.shell_return("getprop ro.build.id").strip()
 
     def getPid(self, packageName):
         """
@@ -1530,9 +1616,9 @@ class Device(object):
         usage: getPid("com.android.settings")
         """
         if system is "Windows":
-            pidinfo = self.shell("ps | findstr %s$" % packageName).stdout.read().decode('utf8')
+            pidinfo = self.shell_return("ps | grep %s" % packageName)
         else:
-            pidinfo = self.shell("ps | grep -w %s" % packageName).stdout.read().decode('utf8')
+            pidinfo = self.shell_return("ps | grep -w %s" % packageName)
 
         if pidinfo == '':
             return "the process doesn't exist."
@@ -1561,19 +1647,18 @@ class Device(object):
         退出app，类似于kill掉进程
         usage: quitApp("com.android.settings")
         """
-        self.shell("am force-stop %s" % packageName)
+        self.shell_return("am force-stop %s" % packageName)
 
     def getFocusedPackageAndActivity(self):
         """
         获取当前应用界面的包名和Activity，返回的字符串格式为：packageName/activityName
         """
         # pattern = re.compile(r"[a-zA-Z0-9\.]+/.[a-zA-Z0-9\.]+")
-        # out = self.shell("dumpsys window w | %s \/ | %s name=" % (find_util, find_util)).stdout.read()
+        # out = self.shell_return("dumpsys window w | %s \/ | %s name=" % (find_util, find_util))
         # 
-        # return pattern.findall(out.decode('utf8'))[0]
+        # return pattern.findall(out)[0]
 
-        packageName = subprocess.check_output(
-            'adb -s %s shell dumpsys activity top | grep ACTIVITY' % (getUdid())).decode()
+        packageName = self.shell_return('dumpsys activity top | grep ACTIVITY')
         packageName_list = packageName.split('ACTIVITY')
         packageName = packageName_list[-1]
         
@@ -1603,35 +1688,35 @@ class Device(object):
         """
         获取最大内存
         """
-        MemTotal = self.shell("cat proc/meminfo | %s MemTotal" % find_util).stdout.read().decode('utf8').split(":")[-1]
+        MemTotal = self.shell_return("cat proc/meminfo | %s MemTotal" % find_util).split(":")[-1]
 
         return MemTotal.replace('\r\r\n','').strip()
     def getMemFree(self):
         """
         获取剩余内存
         """
-        MemFree = self.shell("cat proc/meminfo | %s MemFree" % find_util).stdout.read().decode('utf8').split(":")[-1]
+        MemFree = self.shell_return("cat proc/meminfo | %s MemFree" % find_util).split(":")[-1]
 
         return MemFree.replace('\r\r\n','').strip()
     def getCpuHardware(self):
         """
         获取cpu型号
         """
-        Hardware = self.shell("cat proc/cpuinfo | %s Hardware" % find_util).stdout.read().decode('utf8').split(":")[-1]
+        Hardware = self.shell_return("cat proc/cpuinfo | %s Hardware" % find_util).split(":")[-1]
 
         return Hardware.replace('\r\r\n','').strip()
     def getBatteryLevel(self):
         """
         获取电池电量
         """
-        level = self.shell("dumpsys battery | %s level" % find_util).stdout.read().decode('utf8').split(": ")[-1]
+        level = self.shell_return("dumpsys battery | %s level" % find_util).split(": ")[-1]
 
         return int(level)
     def getBatteryVoltage(self):
         """
         获取电池电压,单位mV毫伏
         """
-        voltage = self.shell("dumpsys battery | %s voltage" % find_util).stdout.read().decode('utf8').split(": ")[-1]
+        voltage = self.shell_return("dumpsys battery | %s voltage" % find_util).split(": ")[-1]
 
         return int(voltage)
 
@@ -1639,21 +1724,21 @@ class Device(object):
         """
         电池健康状态：只有数字2表示good
         """
-        health = self.shell("dumpsys battery | %s health" % find_util).stdout.read().decode('utf8').split(": ")[-1]
+        health = self.shell_return("dumpsys battery | %s health" % find_util).split(": ")[-1]
 
         return int(health)
     def getBatteryACpowered(self):
         """
         电池是否在AC充电器充电
         """
-        ACpowered = self.shell("dumpsys battery | %s AC" % find_util).stdout.read().decode('utf8').split(": ")[-1]
+        ACpowered = self.shell_return("dumpsys battery | %s AC" % find_util).split(": ")[-1]
 
         return ACpowered.replace('\r\r\n','')
     def getBatteryPresent(self):
         """
         电池是否安装在机身
         """
-        present = self.shell("dumpsys battery | %s present" % find_util).stdout.read().decode('utf8').split(": ")[-1]
+        present = self.shell_return("dumpsys battery | %s present" % find_util).split(": ")[-1]
 
         return present.replace('\r\r\n','')
 
@@ -1671,7 +1756,7 @@ class Device(object):
                       3: "BATTERY_STATUS_DISCHARGING:放电状态",
                       4: "BATTERY_STATUS_NOT_CHARGING:未充电",
                       5: "BATTERY_STATUS_FULL:充电已满"}
-        status = self.shell("dumpsys battery | %s status" % find_util).stdout.read().decode('utf8').split(": ")[-1]
+        status = self.shell_return("dumpsys battery | %s status" % find_util).split(": ")[-1]
 
         return statusDict[int(status)]
 
@@ -1679,7 +1764,7 @@ class Device(object):
         """
         获取电池温度
         """
-        temp = self.shell("dumpsys battery | %s temperature" % find_util).stdout.read().decode('utf8').split(": ")[-1]
+        temp = self.shell_return("dumpsys battery | %s temperature" % find_util).split(": ")[-1]
 
         return int(temp) / 10.0
 
@@ -1688,19 +1773,19 @@ class Device(object):
         单个应用程序最大内存限制，超过这个值会产生OOM(内存溢出）
         测程序一般看这个
         """
-        heapgrowthlimit = self.shell("getprop dalvik.vm.heapgrowthlimit").stdout.read().decode('utf8').split("\r\r\n")[0]
+        heapgrowthlimit = self.shell_return("getprop dalvik.vm.heapgrowthlimit").split("\r\r\n")[0]
         return heapgrowthlimit
     def get_heapstartsize(self):
         """
         应用启动后分配的初始内存
         """
-        heapstartsize = self.shell("getprop dalvik.vm.heapstartsize").stdout.read().decode('utf8').split("\r\r\n")[0]
+        heapstartsize = self.shell_return("getprop dalvik.vm.heapstartsize").split("\r\r\n")[0]
         return heapstartsize
     def get_heapsize(self):
         """
         单个java虚拟机最大的内存限制，超过这个值会产生OOM(内存溢出）
         """
-        heapsize = self.shell("getprop dalvik.vm.heapsize").stdout.read().decode('utf8').split("\r\r\n")[0]
+        heapsize = self.shell_return("getprop dalvik.vm.heapsize").split("\r\r\n")[0]
         return heapsize
 
     def getScreenResolution(self):
@@ -1708,13 +1793,13 @@ class Device(object):
         获取设备屏幕分辨率，return (width, high)
         """
         pattern = re.compile(r"\d+")
-        out = self.shell("dumpsys display | %s PhysicalDisplayInfo" % find_util).stdout.read()
+        out = self.shell_return("dumpsys display | %s PhysicalDisplayInfo" % find_util)
         # print(type(out))
         display = ""
         if out:
-            display = pattern.findall(out.decode('utf-8'))
+            display = pattern.findall(out)
         elif int(self.getSdkVersion()) >= 18:
-            display = self.shell("wm size").stdout.read().decode('utf8').split(":")[-1].strip().split("x")
+            display = self.shell_return("wm size").split(":")[-1].strip().split("x")
         else:
             raise Exception("get screen resolution failed!")
         return (int(display[0]), int(display[1]))
@@ -1727,8 +1812,8 @@ class Device(object):
         """
         if not os.path.exists('tmp//screenshot'):
             os.makedirs('tmp//screenshot', exist_ok=True)
-        self.shell("/system/bin/screencap -p /sdcard/screenshot.png").stdout.read().decode('utf8')
-        self.adb("pull /sdcard/screenshot.png tmp/screenshot/%s" % (fileName if fileName != '' else 'screenshot.png')).stdout.read().decode('utf8')
+        self.shell_return("/system/bin/screencap -p /sdcard/screenshot.png")
+        self.adb("pull /sdcard/screenshot.png tmp/screenshot/%s" % (fileName if fileName != '' else 'screenshot.png'))
 
     def reboot(self):
         """
@@ -1741,9 +1826,12 @@ class Device(object):
         获取设备中安装的系统应用包名列表
         """
         sysApp = []
-        for packages in self.shell("pm list packages -s").stdout.readlines():
-            sysApp.append(packages.decode('utf8').split(":")[-1].splitlines()[0])
-
+        result = self.shell_return("pm list packages -s")
+        result_list = result.split("\r\n")
+        for packages in result_list:
+            package = packages.split(":")[-1].strip()
+            if package:
+                sysApp.append(package)
         return sysApp
 
     def getThirdAppList(self):
@@ -1751,20 +1839,26 @@ class Device(object):
         获取设备中安装的第三方应用包名列表
         """
         thirdApp = []
-        for packages in self.shell("pm list packages -3").stdout.readlines():
-            thirdApp.append(packages.decode('utf8').split(":")[-1].splitlines()[0])
-
+        result = self.shell_return("pm list packages -3")
+        result_list = result.split("\r\n")
+        for packages in result_list:
+            package = packages.split(":")[-1].strip()
+            if package:
+                thirdApp.append(package)
         return thirdApp
 
     def getInstalledAppList(self):
         """
         获取设备中所有安装的应用包名列表
         """
-        thirdApp = []
-        for packages in self.shell("pm list packages").stdout.readlines():
-            thirdApp.append(packages.decode('utf8').split(":")[-1].splitlines()[0])
-
-        return thirdApp
+        installApp = []
+        result= self.shell_return("pm list packages")
+        result_list = result.split("\r\n")
+        for packages in result_list:
+            package = packages.split(":")[-1].strip()
+            if package:
+                installApp.append(package)
+        return installApp
 
     def getMatchingAppList(self, keyword):
         """
@@ -1772,9 +1866,12 @@ class Device(object):
         usage: getMatchingAppList("qq")
         """
         matApp = []
-        for packages in self.shell("pm list packages %s" % keyword).stdout.readlines():
-            matApp.append(packages.decode('utf8').split(":")[-1].splitlines()[0])
-
+        result = self.shell_return("pm list packages %s" % keyword)
+        result_list = result.split("\r\n")
+        for packages in result_list:
+            package = packages.split(":")[-1].strip()
+            if package:
+                matApp.append(package)
         return matApp
 
     def getAppStartTotalTime(self, component):
@@ -1782,8 +1879,8 @@ class Device(object):
         获取启动应用所花时间
         usage: getAppStartTotalTime("com.android.settings/.Settings")
         """
-        time = self.shell("am start -W %s | %s TotalTime" % (component, find_util)) \
-            .stdout.read().decode('utf8').split(": ")[-1]
+        time = self.shell_return("am start -W %s | %s TotalTime" % (component, find_util)) \
+            .split(": ")[-1]
         return int(time)
 
     def installApp(self, appFile):
@@ -1801,8 +1898,10 @@ class Device(object):
         usage: isInstall("com.example.apidemo")
         """
         matApp = []
-        for packages in self.shell("pm list packages %s" % packageName).stdout.readlines():
-            package = packages.decode('utf8').split(":")[-1].splitlines()[0]
+        result = self.shell_return("pm list packages %s" % packageName)
+        result_list = result.split("\r\n")
+        for packages in result_list:
+            package = packages.split(":")[-1].strip()
             if package == packageName:
                 matApp.append(package)
                 break
@@ -1864,7 +1963,7 @@ class Device(object):
         启动拨号器拨打电话
         usage: callPhone(10086)
         """
-        self.shell("am start -a android.intent.action.CALL -d tel:%s" % str(number))
+        self.shell_return("am start -a android.intent.action.CALL -d tel:%s" % str(number))
 
     def sendKeyEvent(self, keycode):
         """
@@ -1881,14 +1980,14 @@ class Device(object):
         发送一个按键长按事件，Android 4.4以上
         usage: longPressKey(keycode.HOME)
         """
-        self.shell("input keyevent --longpress %s" % str(keycode))
+        self.shell_return("input keyevent --longpress %s" % str(keycode))
 
     def click_element(self, element):
         """
         点击元素
         usage: click_element(Element().findElementByName(u"计算器"))
         """
-        self.shell("input tap %s %s" % (str(element[0]), str(element[1])))
+        self.shell_return("input tap %s %s" % (str(element[0]), str(element[1])))
 
     def click(self, x, y=None):
         """
@@ -1900,10 +1999,10 @@ class Device(object):
             x = x0[0]
             y = x0[1]
         if x < 1:
-            self.shell("input tap %s %s" % (
+            self.shell_return("input tap %s %s" % (
             str(x * self.getScreenResolution()[0]), str(y * self.getScreenResolution()[1])))
         else:
-            self.shell("input tap %s %s" % (x, y))
+            self.shell_return("input tap %s %s" % (x, y))
 
     def swipe(self, start_ratioWidth, start_ratioHigh, end_ratioWidth, end_ratioHigh, duration=" "):
         """
@@ -1955,7 +2054,7 @@ class Device(object):
         """
        长按元素, Android 4.4
         """
-        self.shell("input swipe %s %s %s %s %s" % (str(e[0]), str(e[1]), str(e[0]), str(e[1]), str(2000)))
+        self.shell_return("input swipe %s %s %s %s %s" % (str(e[0]), str(e[1]), str(e[0]), str(e[1]), str(2000)))
 
     # 删除文本框内容，入参：删除次数
     def clear_text(self, number):
@@ -1994,8 +2093,8 @@ class Device(object):
         if not os.path.exists("tmp//logcat"):
             os.makedirs("tmp//logcat", exist_ok=True)
         try:
-            self.shell('rm -r /data/local/tmp/logcat.txt')
-            self.shell('logcat -v threadtime -d -f /data/local/tmp/logcat.txt')
+            self.shell_return('rm -r /data/local/tmp/logcat.txt')
+            self.shell_return('logcat -v threadtime -d -f /data/local/tmp/logcat.txt')
             self.adb('pull /data/local/tmp/logcat.txt tmp//logcat//logcat%s-%s-%s.txt' % (
             self.get_time()[11:], msg['str1'], msg['str2']))
         except:
@@ -2034,10 +2133,10 @@ class Device(object):
     def is_remote_file_exist(self, remote):
         '''
         判断手机内部文件是否存在,查看手机内部文件是否存在
-        :param remote: 
+        :param remote:  'sdcard/deviceid.txt'
         :return: 存在 Ture;不存在 False
         '''
-        ls_remote = self.shell_return_os_popen(remote)
+        ls_remote = self.shell_return_os_popen('ls ' + remote)
         if 'No such file or directory' in ls_remote or 'not found' in ls_remote:
             return False
         else:
@@ -2113,10 +2212,7 @@ class Device(object):
             h5packageName = 'ULightApp/'.join(h5packageName.split('ULightApp/')[1:])
         except:
             pass
-        if h5packageName == '':
-            return ''
-        else:
-            return h5packageName
+        return h5packageName
 
     # 获取ip地址
     def ipAddress(self):
@@ -2221,7 +2317,6 @@ class Device(object):
         :param confidence: 相似度
         :return: 位置坐标
         '''
-        from uitest import aircv as ac
         self.screenshot('screenshot.png')
         imsrc = ac.imread('tmp/screenshot/screenshot.png')  # 原始图像
         imsch = ac.imread(icon_name)  # 待查找的部分
@@ -2270,7 +2365,7 @@ class Device(object):
         '''
         print('1、pid方式查看wifi流量：')
         # 获取程序pid
-        package_pid = re.split('[ ]+', self.shell_return('ps | grep %s' % (packageName)).split("\r\r\n")[-2])[1].strip()
+        package_pid = self.getPid(packageName)
         print('package_pid:',package_pid)
         # 通过pid查看wifi流量
         package_wlan = re.split('[ ]+', self.shell_return('cat /proc/%s/net/dev | grep wlan0' % (package_pid)).split("\r\r\n")[0])
@@ -2346,3 +2441,17 @@ class archive_json(object):
             return False
         return True
 
+# 当前时间
+def get_time():
+    return time.strftime("%Y-%m-%d %H-%M-%S", time.localtime())
+
+def get_time_day():
+    return time.strftime("%Y-%m-%d", time.localtime())
+
+# 时间戳 + str
+def print_before(str):
+    print('%s %s' % (get_time(), str))
+
+# 时间戳 + str1 + str2
+def print_str(str1, str2):
+    print('%s %s%s' % (get_time(), str1, str2))

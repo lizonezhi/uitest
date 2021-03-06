@@ -6,12 +6,19 @@ import win32clipboard as w
 import win32api
 import win32con
 import win32gui
+from win32con import WM_INPUTLANGCHANGEREQUEST
 from ctypes import *
 import ctypes
 import time
 import os
 import re
 import sys
+import socket
+from uitest import popen_close
+import platform
+from psutil import net_if_addrs
+import serial
+import serial.tools.list_ports
 
 
 class POINT(Structure):
@@ -395,6 +402,37 @@ class WindowsUtil:
         else:
             return ip
 
+    def get_host_ip(self):
+        """
+        查询本机局域网ip地址
+        windows和Linux系统下均可正确获取IP地址
+        :return: ip
+        """
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+
+        return ip
+
+    def get_host_name(self):
+        '''
+        获取本机计算机名称
+        :return:
+        '''
+        hostname = socket.gethostname()
+        return hostname
+
+    def get_host_ip_by_name(self):
+        '''
+        根据本机计算机名称获取ip，不是局域网ip
+        :return:
+        '''
+        ip = socket.gethostbyname(self.get_host_name())
+        return ip
+
     def write_txt_file(self, name='name', content='content', path=''):
         '''
         写入内容到电脑本地txt文件
@@ -480,6 +518,11 @@ class WindowsUtil:
         win32api.keybd_event(86, 0, win32con.KEYEVENTF_KEYUP, 0)  # 释放按键
         win32api.keybd_event(17, 0, win32con.KEYEVENTF_KEYUP, 0)
 
+    def write(self, data):
+        length = win32gui.GetWindowTextLength(self.handle)
+        win32gui.SendMessage(self.handle, win32con.EM_SETSEL, length, length)
+        win32gui.SendMessage(self.handle, win32con.EM_REPLACESEL, False, data)
+
     def get_new_file_name(self, path, file_name):
         '''
             返回重命名的文件名,按照（1）（1）格式拼接，保存文件时用
@@ -489,8 +532,8 @@ class WindowsUtil:
         g = os.walk(path)
         file_name_list = []
         for path, dir_list, file_list in g:
-            for file_name in file_list:
-                file_name_list.append(str(file_name))
+            for file_list_name in file_list:
+                file_name_list.append(str(file_list_name))
 
         new_file_name = file_name
         count = 0
@@ -508,3 +551,89 @@ class WindowsUtil:
                 file_name_body = new_file_name
             new_file_name = file_name_body + '（' + str(count) + '）' + file_name_tail
         return new_file_name
+
+    def get_current_connect_wifi_ssid(self):
+        '''
+            获取当前连接的WiFi名称
+        '''
+        cmd = 'netsh WLAN show interfaces'
+        scanoutput_list = popen_close(cmd)
+        currentSSID = ''
+        for i in scanoutput_list:
+            if 'SSID' in i:
+                currentSSID = i
+                break
+        if currentSSID:
+            currentSSID = currentSSID.split(':')[1].replace('\n', '').replace('\r', '').strip()
+        return currentSSID
+
+    def get_current_connect_wifi_authentication(self):
+        '''
+            获取当前连接的WiFi的身份验证（加密方式， 如：wpa）
+        '''
+        cmd = 'netsh WLAN show interfaces'
+        scanoutput_list = popen_close(cmd)
+        current_authentication = ''
+        for i in scanoutput_list:
+            if '身份验证' in i:
+                current_authentication = i
+                break
+        current_authentication = current_authentication.split(':')[1].replace('\n', '').replace('\r', '').strip()
+        current_authentication = current_authentication.upper()
+        if current_authentication.startswith("WPA"):
+            current_authentication = 'WPA'
+        elif current_authentication.startswith("WEP"):
+            current_authentication = 'WEP'
+        return current_authentication
+
+    def get_wifi_password(self, ssid=None):
+        '''
+            获取WiFi密码
+        '''
+        if not ssid:
+            # 默认获取当前连接的wifi密码
+            ssid = self.get_current_connect_wifi_ssid()
+        cmd = 'netsh wlan show profile name="%s" key=clear' % (ssid)
+        currentSSID_password_all_info_list = popen_close(cmd)
+        currentSSID_password = ''
+        for i in currentSSID_password_all_info_list:
+            if '关键内容' in i:
+                currentSSID_password = i
+                break
+        if currentSSID_password:
+            currentSSID_password = currentSSID_password.split(':')[1].replace('\n', '').replace('\r', '').strip()
+        return currentSSID_password
+
+    def get_mac_address(self):
+        '''
+            获取蓝牙 MAC 地址
+        '''
+        mac_address = ''
+        if platform.system() == 'Darwin':
+            address = popen_close('system_profiler SPBluetoothDataType | grep Address:')[0].replace(' ',
+                                                                                                             '')
+            mac_address = re.search(r"\w\w-\w\w-\w\w-\w\w-\w\w-\w\w", address).group()
+            mac_address = mac_address.replace("-", ":")
+        else:
+            for k, v, in net_if_addrs().items():
+                if "蓝牙" in k or "bluetooth" in k or "Bluetooth" in k:
+                    for item in v:
+                        address = item[1]
+                        if '-' in address and len(address) == 17:
+                            mac_address = address.replace("-", ":")
+                            break
+        return mac_address
+    
+    def get_bluetooth_com_list(self):
+        '''
+            获取蓝牙串口 COM 端口号列表
+        '''
+        plist = list(serial.tools.list_ports.comports())
+        com_list = []
+        if len(plist) > 0:
+            for i in plist:
+                serialName = i[0]
+                # serialFd = serial.Serial(serialName, 9600, timeout=60)
+                if i[1].find('蓝牙') >= 0 or i[1].find('Bluetooth') >= 0 or i[1].find('bluetooth') >= 0:
+                    com_list.append(serialName)
+        return com_list
