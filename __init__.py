@@ -578,7 +578,7 @@ def popen(cmd):
                             stdin=subprocess.PIPE,
                             stderr = subprocess.STDOUT,
                             bufsize=-1)
-    return _wrap_close(io.TextIOWrapper(proc.stdout), proc)
+    return _wrap_close(io.TextIOWrapper(proc.stdout, encoding='utf8'), proc)
 def popen_close(cmd):
     '''
     重写os.popen()方法，获取cmd命令的返回，并关闭流
@@ -594,7 +594,7 @@ def popen_close(cmd):
                             stdin=subprocess.PIPE,
                             stderr = subprocess.STDOUT,
                             bufsize=-1)
-    result_close = _wrap_close(io.TextIOWrapper(proc.stdout), proc)
+    result_close = _wrap_close(io.TextIOWrapper(proc.stdout, encoding='utf8'), proc)
     result = result_close.readlines()
     result_list = list_util.ListUtil().strip(result)#返回的list中没有换行符和''
     result_close.close()
@@ -637,7 +637,7 @@ def os_popen(cmd):
                             stdin=subprocess.PIPE,
                             stderr=subprocess.STDOUT,
                             bufsize=-1)
-    return _wrap_close(io.TextIOWrapper(proc.stdout), proc)
+    return _wrap_close(io.TextIOWrapper(proc.stdout, encoding='utf8'), proc)
 
 def check_output(cmd):
     result = ''

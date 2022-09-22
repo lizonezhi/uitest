@@ -6,6 +6,7 @@ import win32clipboard as w
 import win32api
 import win32con
 import win32gui
+import win32ui
 from win32con import WM_INPUTLANGCHANGEREQUEST
 from ctypes import *
 import ctypes
@@ -16,9 +17,11 @@ import sys
 import socket
 from uitest import popen_close
 import platform
+import psutil
 from psutil import net_if_addrs
 import serial
 import serial.tools.list_ports
+from uitest import aircv as ac
 
 
 class POINT(Structure):
@@ -196,24 +199,28 @@ class WindowsAutomator:
         windll.user32.GetCursorPos(byref(po))
         return int(po.x), int(po.y)
 
+    def mouse_click_down(self):
+        time.sleep(0.05)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, int(0), int(0))
+
+    def mouse_click_up(self):
+        time.sleep(0.05)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, int(0), int(0))
+
     def mouse_click(self, x=None, y=None):
-        if not x is None and not y is None:
-            self.mouse_move(x, y)
-            time.sleep(0.05)
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        self.mouse_move(x, y)
+        self.mouse_click_down()
+        self.mouse_click_up()
 
     def mouse_dclick(self, x=None, y=None):
-        if not x is None and not y is None:
-            self.mouse_move(x, y)
-            time.sleep(0.05)
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        self.mouse_move(x, y)
+        self.mouse_click_down()
+        self.mouse_click_up()
+        self.mouse_click_down()
+        self.mouse_click_up()
 
     def mouse_move(self, x, y):
-        windll.user32.SetCursorPos(x, y)
+        windll.user32.SetCursorPos(POINT(int(x), int(y)))
 
     def key_input(self, str=''):
         for c in str:
@@ -231,6 +238,151 @@ class WindowsAutomator:
     # 按回车键
     def key_event_enter(self):
         self.key_event(self.VK_CODE['enter'])
+
+    # 窗口置顶
+    def put_top(self, title):
+        '''
+        :param title:窗口名， 例如：‘D:\software\Programming\Python36-32\python.exe’
+        '''
+        titles = {}
+        def chuangkou(hwnd, mouse):
+            if win32gui.IsWindow(hwnd) and win32gui.IsWindowEnabled(hwnd) and win32gui.IsWindowVisible(hwnd):
+                titles[hwnd] = win32gui.GetWindowText(hwnd)
+        win32gui.EnumWindows(chuangkou, 0)
+        for k, v in titles.items():
+            if v == title:
+                hwnd = k
+                win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, win32con.SWP_NOMOVE \
+                             | win32con.SWP_NOSIZE | win32con.SWP_NOOWNERZORDER)
+                win32gui.ShowWindow(hwnd, win32con.SW_SHOWNORMAL)
+
+    # 取消窗口置顶
+    def cancel_put_top(self, title):
+        titles = {}
+        def chuangkou(hwnd, mouse):
+            if win32gui.IsWindow(hwnd) and win32gui.IsWindowEnabled(hwnd) and win32gui.IsWindowVisible(hwnd):
+                titles[hwnd] = win32gui.GetWindowText(hwnd)
+        win32gui.EnumWindows(chuangkou, 0)
+        for k, v in titles.items():
+            if v == title:
+                hwnd = k
+                win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, win32con.SWP_NOMOVE \
+                             | win32con.SWP_NOSIZE | win32con.SWP_NOOWNERZORDER)
+
+    # 点击窗口的按钮
+    def click_button(self, title, button):
+        '''
+        :param title:窗口名， 例如：‘D:\software\Programming\Python36-32\python.exe’
+        :param button:按钮名， 例如：‘确定’
+        '''
+        time.sleep(0.05)
+        handle = win32gui.FindWindowEx(0, 0, 0, title)
+        hbutton = win32gui.FindWindowEx(handle, 0, "Button", button)
+        if hbutton != 0:
+            win32api.PostMessage(hbutton, win32con.WM_LBUTTONDOWN, 0, 0)
+            win32api.PostMessage(hbutton, win32con.WM_LBUTTONUP, 0, 0)
+            return True
+        return None
+
+    # 根据图片名判断当前页面
+    def find_icon(self, icon_name, confidence=None, org_icon_name = None):
+        '''
+        usage:  find_icon('icon/print_cancel.720x1280.jpg', '')
+                find_icon('icon/print_cancel.720x1280.jpg', 0.9)
+        :param icon_name: 本地图片路径，待查找的图
+        :param confidence: 相似度
+        :return: 位置坐标
+        '''
+        if not org_icon_name:
+            org_icon_name = 'screenshot.png'
+            WindowsUtil().window_capture(org_icon_name)
+        imsrc = ac.imread(org_icon_name)  # 原始图像
+        imsch = ac.imread(icon_name)  # 待查找的部分
+        result = ac.find_template(imsrc, imsch)
+        if not confidence:
+            confidence = 0.95
+        if result == None:
+            return False
+        elif result['confidence'] < confidence:
+            return False
+        else:
+            location = result['result']
+            return location
+
+    # 根据图片名判断当前页面,有超时时间
+    def find_icon_wait(self, icon_name, icon_name_other=None, confidence=None, org_icon_name = None, time_out=3):
+        startTime = time.time()
+        while True:
+            
+            location = self.find_icon(icon_name, confidence, org_icon_name)
+            if location:
+                return location
+            elif icon_name_other:
+                location = self.find_icon(icon_name_other, confidence, org_icon_name)
+                if location:
+                    return location
+            else:
+                print('寻找%s' % (icon_name))
+            time.sleep(0.05)
+            if time.time() - startTime > time_out:
+                print('未找到%s' % (icon_name))
+                return False
+
+    # 点击找到的图片
+    def find_icon_click(self, icon_name, icon_name_other=None, confidence=None, org_icon_name=None, double_click=False, time_out=3):
+        '''
+        usage:  find_icon_click('icon/print_cancel.720x1280.jpg', '')
+                find_icon_click('icon/print_cancel.720x1280.jpg', 0.9)
+        :param icon_name: 本地图片路径，待查找的图
+        :param confidence: 相似度
+        :param org_icon_name: 原图片
+        :return: True 或者 False
+        '''
+        location = self.find_icon_wait(icon_name, icon_name_other, confidence, org_icon_name, time_out)
+        if location:
+            if double_click:
+                self.mouse_dclick(location[0], location[1])
+            else:
+                self.mouse_click(location[0], location[1])
+            return location
+        else:
+            return False
+
+    # 滑动找到的图片
+    def find_icon_swipe(self, icon_name, icon_name_other=None, confidence=None, org_icon_name = None, toAddX=200, toAddY=200, time_out=3):
+        '''
+        usage:  find_icon_click('icon/print_cancel.720x1280.jpg')
+                find_icon_click('icon/print_cancel.720x1280.jpg', 0.9)
+        :param icon_name: 本地图片路径，待查找的图
+        :param confidence: 相似度
+        :param org_icon_name: 原图片
+        :param toAddX: 向右滑动的距离
+        :param toAddY: 向下滑动的距离
+        :return: True 或者 False
+        '''
+        location = self.find_icon_wait(icon_name, icon_name_other, confidence, org_icon_name, time_out)
+        if location:
+            self.mouse_swipe(location[0], location[1], location[0] + toAddX, location[1] + toAddY)
+            return location
+        else:
+            return False
+
+    # 向右滑动找到的图片
+    def find_icon_swipe_to_right(self, icon_name, icon_name_other=None, confidence=None, org_icon_name=None,
+                                 toAddX=200, time_out=3):
+        return self.find_icon_swipe(icon_name, icon_name_other, confidence, org_icon_name, toAddX, 0, time_out)
+
+    # 向下滑动找到的图片
+    def find_icon_swipe_to_down(self, icon_name, icon_name_other=None, confidence=None, org_icon_name=None,
+                                toAddY=200, time_out=3):
+        return self.find_icon_swipe(icon_name, icon_name_other, confidence, org_icon_name, 0, toAddY, time_out)
+
+    def mouse_swipe(self, x, y, toX, toY):
+        self.mouse_move(x, y)
+        self.mouse_click_down()
+        self.mouse_move(toX, toY)
+        self.mouse_click_up()
+
 
 class Log(object):
     '''
@@ -519,9 +671,10 @@ class WindowsUtil:
         win32api.keybd_event(17, 0, win32con.KEYEVENTF_KEYUP, 0)
 
     def write(self, data):
-        length = win32gui.GetWindowTextLength(self.handle)
-        win32gui.SendMessage(self.handle, win32con.EM_SETSEL, length, length)
-        win32gui.SendMessage(self.handle, win32con.EM_REPLACESEL, False, data)
+        handle = win32gui.GetForegroundWindow() # 获取当前最靠前并且是激活得窗口 不用传参数
+        # title = win32gui.GetWindowText(handle)  # 获取标题
+        # clsname = win32gui.GetClassName(handle) # 获取类名
+        win32gui.SendMessage(handle, win32con.WM_SETTEXT, None, data)
 
     def get_new_file_name(self, path, file_name):
         '''
@@ -575,7 +728,7 @@ class WindowsUtil:
         scanoutput_list = popen_close(cmd)
         current_authentication = ''
         for i in scanoutput_list:
-            if '身份验证' in i:
+            if '身份验证' in i or 'Authentication' in i:
                 current_authentication = i
                 break
         current_authentication = current_authentication.split(':')[1].replace('\n', '').replace('\r', '').strip()
@@ -597,7 +750,7 @@ class WindowsUtil:
         currentSSID_password_all_info_list = popen_close(cmd)
         currentSSID_password = ''
         for i in currentSSID_password_all_info_list:
-            if '关键内容' in i:
+            if '关键内容' in i or 'Key Content' in i:
                 currentSSID_password = i
                 break
         if currentSSID_password:
@@ -637,3 +790,103 @@ class WindowsUtil:
                 if i[1].find('蓝牙') >= 0 or i[1].find('Bluetooth') >= 0 or i[1].find('bluetooth') >= 0:
                     com_list.append(serialName)
         return com_list
+
+    def proc_exist(self, process_name):
+        '''
+            判断该进程是否存在
+            @:param process_name 进程名，注意要特殊的才行
+        '''
+        count = 0
+        for proc in psutil.process_iter():
+            if process_name == proc.name():
+                count += 1
+            if count > 2:
+                return True
+        return False
+
+    def get_proc_pid_by_name(self, process_name):
+        '''
+            根据进程名获取pid，按进程创建时间从早到晚排序
+            @:param process_name 进程名，注意要特殊的才行
+        '''
+        pid_list = []
+        for proc in psutil.process_iter():
+            if process_name == proc.name():
+                pid_list.append(proc.pid)
+                print(proc.create_time())
+        return pid_list
+
+    def get_my_proc_pid(self):
+        '''
+            判断本身同样进程名的pid，包括自己
+        '''
+        return self.get_proc_pid_by_name(self.get_my_name())
+
+    def my_proc_exist(self):
+        '''
+            判断本身进程是否存在
+        '''
+        return self.proc_exist(self.get_my_name())
+
+    def taskkill(self, pids):
+        '''
+            关闭进程
+        '''
+        count = 0
+        if isinstance(pids, (list, tuple)):
+            for pid in pids:
+                os.popen('taskkill.exe -F /pid:' + str(pid))
+                count += 1
+        elif isinstance(cmdargs, str):
+            os.popen('taskkill.exe -F /pid:' + str(pid))
+            count += 1
+        return count
+
+    def taskkill_my_proc(self):
+        '''
+            关闭自身相同名的进程
+        '''
+        return self.taskkill(self.get_my_proc_pid())
+
+    def get_my_name(self):
+        '''
+            获取当前程序文件名，例如：mispos_confirm.exe
+        '''
+        return os.path.basename(os.path.realpath(sys.argv[0]))
+
+    def get_my_dirname(self):
+        '''
+            获取当前程序全路径，例如：D:\SVN_CODE\
+        '''
+        return os.path.dirname(os.path.realpath(sys.argv[0])) + '\\'
+
+    def get_my_full_name(self):
+        '''
+            获取当前程序全路径文件名，例如：D:\SVN_CODE\mispos_api_wifi.exe
+        '''
+        return os.path.abspath(os.path.realpath(sys.argv[0]))
+
+    def window_capture(self, filename=None):
+        if not filename:
+            filename = 'screenshot.png'
+        hwnd = 0  # 窗口的编号，0号表示当前活跃窗口
+        # 根据窗口句柄获取窗口的设备上下文DC（Divice Context）
+        hwndDC = win32gui.GetWindowDC(hwnd)
+        # 根据窗口的DC获取mfcDC
+        mfcDC = win32ui.CreateDCFromHandle(hwndDC)
+        # mfcDC创建可兼容的DC
+        saveDC = mfcDC.CreateCompatibleDC()
+        # 创建bigmap准备保存图片
+        saveBitMap = win32ui.CreateBitmap()
+        # 获取监控器信息
+        MoniterDev = win32api.EnumDisplayMonitors(None, None)
+        w = MoniterDev[0][2][2]
+        h = MoniterDev[0][2][3]
+        # print w,h　　　#图片大小
+        # 为bitmap开辟空间
+        saveBitMap.CreateCompatibleBitmap(mfcDC, w, h)
+        # 高度saveDC，将截图保存到saveBitmap中
+        saveDC.SelectObject(saveBitMap)
+        # 截取从左上角（0，0）长宽为（w，h）的图片
+        saveDC.BitBlt((0, 0), (w, h), mfcDC, (0, 0), win32con.SRCCOPY)
+        saveBitMap.SaveBitmapFile(saveDC, filename)
