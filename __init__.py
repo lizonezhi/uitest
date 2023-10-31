@@ -63,6 +63,8 @@ def getUdid():
             if deviceInfo[3] == '':
                 return ''
             else:
+                if "?" in udid:
+                    return ""
                 return udid.strip()
         else:
             udid='device'.join(deviceInfo[1].split('device')[:1])
@@ -70,6 +72,8 @@ def getUdid():
             if deviceInfo[1]=='':
                 return ''
             else:
+                if "?" in udid:
+                    return ""
                 return udid.strip()
     except:
         return ''
@@ -420,15 +424,18 @@ def write_txt_file(name='name', content='content'):
         return True
     except:
         return False
-def read_txt_file(name='name'):
+def read_txt_file(name='name', suffix=None):
     '''
-    写入文件到电脑本地
-    :param name:文件名  content：内容
+    读取电脑本地文件
+    :param name:文件名  suffix：后缀名
     :return: True or False 写入成功或失败
     ：usage： write_txt_file(name='记录日志', content='123')
     '''
     try:
         list1 = []
+        name_temp = name[-4:]
+        if name_temp == ".txt":
+            name = name[:-4]
         f = open('%s.txt' % (name))
         line = f.readline()
         while line:
@@ -670,10 +677,10 @@ class Element(object):
         获取当前Activity的控件树
         """
         if int(self.utils.getSdkVersion()) >= 19:
-            self.utils.shell("uiautomator dump --compressed /data/local/tmp/uidump.xml").wait()
+            self.utils.shell_return("uiautomator dump --compressed /data/local/tmp/uidump.xml")
         else:
-            self.utils.shell("uiautomator dump /data/local/tmp/uidump.xml").wait()
-        self.utils.adb("pull data/local/tmp/uidump.xml %s" % self.tempFile).wait()
+            self.utils.shell_return("uiautomator dump /data/local/tmp/uidump.xml")
+        self.utils.adb_return("pull data/local/tmp/uidump.xml %s" % self.tempFile)
         # self.utils.shell("rm /data/local/tmp/uidump.xml").wait()
 
     def __element(self, attrib, name):
@@ -1423,6 +1430,8 @@ class Device(object):
     单个设备，可不传入参数device_id
     """
     def __init__(self, device_id=""):
+        if "?" in device_id:
+            device_id = ""
         if device_id == "":
             self.device_id = ""
         else:
@@ -2317,20 +2326,24 @@ class Device(object):
         :param confidence: 相似度
         :return: 位置坐标
         '''
-        self.screenshot('screenshot.png')
-        imsrc = ac.imread('tmp/screenshot/screenshot.png')  # 原始图像
-        imsch = ac.imread(icon_name)  # 待查找的部分
-        result = ac.find_template(imsrc, imsch)
-        print(result)
-        if not confidence:
-            confidence = 0.95
-        if result == None:
+        try:
+            self.screenshot('screenshot.png')
+            imsrc = ac.imread('tmp/screenshot/screenshot.png')  # 原始图像
+            imsch = ac.imread(icon_name)  # 待查找的部分
+            result = ac.find_template(imsrc, imsch)
+            print(result)
+            if not confidence:
+                confidence = 0.95
+            if result == None:
+                return False
+            elif result['confidence'] < confidence:
+                return False
+            else:
+                location = result['result']
+                return location
+        except:
             return False
-        elif result['confidence'] < confidence:
-            return False
-        else:
-            location = result['result']
-            return location
+
 
     # 点击找到的图片
     def find_icon_click(self, icon_name, confidence=None):
