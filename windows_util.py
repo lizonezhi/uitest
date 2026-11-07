@@ -618,7 +618,7 @@ class WindowsUtil:
         try:
             list1 = []
             f = open('%s' % (filename))
-            with open(filename, 'r') as f:
+            with open(filename, 'r', encoding='utf-8') as f:
                 line = ''
                 for i in f.readlines():
                     list1.append(i)

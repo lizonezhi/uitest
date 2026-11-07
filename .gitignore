@@ -1,2 +1,5 @@
 /git上传(每次操作需要更改上传的文件).bat
 __pycache__/
+*.py[cod]
+*$py.class
+```
